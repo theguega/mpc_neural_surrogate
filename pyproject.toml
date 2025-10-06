@@ -1,0 +1,48 @@
+[project]
+name = "mcp-surrogate"
+version = "0.1.0"
+description = "Approximating Model Predictive Control policies using neural networks"
+readme = "README.md"
+authors = [
+    { name = "Theo", email = "130441797+theguega@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "casadi>=3.7.2",
+    "gym>=0.26.2",
+    "h5py>=3.14.0",
+    "matplotlib>=3.10.6",
+    "mujoco>=3.3.6",
+    "numpy>=2.3.3",
+    "pre-commit>=4.3.0",
+    "scikit-learn>=1.7.2",
+    "scipy>=1.16.2",
+    "seaborn>=0.13.2",
+]
+
+[project.optional-dependencies]
+dev = ["ipython", "pytest", "black", "ruff", "jupyter", "wandb"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F"]
+ignore = ["E501"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+fixable = ["ALL"]
+
+[project.scripts]
+mcp-surrogate = "mcp_surrogate:main"
+
+[build-system]
+requires = ["uv_build>=0.8.8,<0.9.0"]
+build-backend = "uv_build"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
