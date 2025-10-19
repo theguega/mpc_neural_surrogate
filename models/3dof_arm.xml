@@ -1,0 +1,83 @@
+<mujoco model="3dof_robot_arm">
+  <compiler angle="radian" coordinate="local"/>
+
+  <option timestep="0.001" gravity="0 0 -9.81" iterations="50" ls_iterations="10">
+    <flag warmstart="enable"/>
+  </option>
+
+  <default>
+    <joint damping="5" armature="0.5" frictionloss="0.1"/>
+    <geom contype="1" conaffinity="1" friction="1 0.5 0.5" rgba="0.7 0.7 0.7 1"/>
+  </default>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="512"/>
+    <texture name="texplane" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2" width="512" height="512" mark="cross" markrgb="0.8 0.8 0.8"/>
+    <material name="matplane" reflectance="0.3" texture="texplane" texrepeat="1 1" texuniform="true"/>
+  </asset>
+
+  <worldbody>
+    <!-- Ground plane -->
+    <geom name="floor" pos="0 0 0" size="2 2 0.1" type="plane" material="matplane"/>
+    <light directional="true" diffuse="0.6 0.6 0.6" specular="0.3 0.3 0.3" pos="0 0 4" dir="0 0 -1"/>
+    <light directional="true" diffuse="0.4 0.4 0.4" specular="0.2 0.2 0.2" pos="1 1 4" dir="0 0 -1"/>
+
+    <!-- Base platform -->
+    <body name="base_platform" pos="0 0 0.05">
+      <geom name="base_geom" type="box" size="0.15 0.15 0.05" rgba="0.3 0.3 0.3 1"/>
+      <inertial pos="0 0 0" mass="2" diaginertia="0.01 0.01 0.01"/>
+
+      <!-- Joint 1: Base rotation (θ₁) around Z-axis -->
+      <body name="link1" pos="0 0 0.05">
+        <joint name="joint1" type="hinge" pos="0 0 0" axis="0 0 1" range="-3.14 3.14" damping="2"/>
+        <geom name="link1_geom" type="cylinder" size="0.05 0.15" pos="0 0 0.15" rgba="0.8 0.2 0.2 1"/>
+        <inertial pos="0 0 0.15" mass="1" diaginertia="0.01 0.01 0.005"/>
+
+        <!-- Joint 2: Shoulder (θ₂) around Y-axis -->
+        <body name="link2" pos="0 0 0.3">
+          <joint name="joint2" type="hinge" pos="0 0 0" axis="0 1 0" range="-1.57 1.57" damping="1.5"/>
+          <geom name="link2_geom" type="capsule" fromto="0 0 0 0 0 0.3" size="0.04" rgba="0.2 0.8 0.2 1"/>
+          <inertial pos="0 0 0.15" mass="0.8" diaginertia="0.008 0.008 0.002"/>
+
+          <!-- Joint 3: Elbow (θ₃) around Y-axis -->
+          <body name="link3" pos="0 0 0.3">
+            <joint name="joint3" type="hinge" pos="0 0 0" axis="0 1 0" range="-2.0 2.0" damping="1"/>
+            <geom name="link3_geom" type="capsule" fromto="0 0 0 0 0 0.25" size="0.035" rgba="0.2 0.2 0.8 1"/>
+            <inertial pos="0 0 0.125" mass="0.5" diaginertia="0.005 0.005 0.001"/>
+
+            <!-- End effector -->
+            <body name="end_effector" pos="0 0 0.25">
+              <geom name="ee_geom" type="sphere" size="0.04" rgba="1 0.8 0 1"/>
+              <inertial pos="0 0 0" mass="0.1" diaginertia="0.0001 0.0001 0.0001"/>
+
+              <!-- Site for end effector position tracking -->
+              <site name="ee_site" pos="0 0 0" size="0.01" rgba="1 0 0 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <!-- Position servos for each joint -->
+    <motor name="actuator1" joint="joint1" ctrlrange="-5 5"/>
+    <motor name="actuator2" joint="joint2" ctrlrange="-5 5"/>
+    <motor name="actuator3" joint="joint3" ctrlrange="-5 5"/>
+  </actuator>
+
+  <sensor>
+    <!-- Joint position sensors -->
+    <jointpos name="joint1_pos" joint="joint1"/>
+    <jointpos name="joint2_pos" joint="joint2"/>
+    <jointpos name="joint3_pos" joint="joint3"/>
+
+    <!-- Joint velocity sensors -->
+    <jointvel name="joint1_vel" joint="joint1"/>
+    <jointvel name="joint2_vel" joint="joint2"/>
+    <jointvel name="joint3_vel" joint="joint3"/>
+
+    <!-- End effector position sensor -->
+    <framepos name="ee_pos" objtype="site" objname="ee_site"/>
+  </sensor>
+</mujoco>
