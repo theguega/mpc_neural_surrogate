@@ -12,7 +12,7 @@ def get_ee_position(model, data):
     return data.site_xpos[site_id].copy()
 
 
-def mpc_control(model, data, target_pos, horizon=10):
+def mpc_control(model, data, target_pos, horizon=30):
     """
     MPC controller using MuJoCo's mj_step for accurate dynamics prediction.
     Optimizes a sequence of torques over a short horizon.
@@ -22,6 +22,13 @@ def mpc_control(model, data, target_pos, horizon=10):
     # store the initial state to reset to it for each optimization iteration
     q0 = data.qpos[:n_joints].copy()
     dq0 = data.qvel[:n_joints].copy()
+
+    # Compute gravity compensation torques for initial guess
+    temp_data = mujoco.MjData(model)
+    temp_data.qpos[:n_joints] = q0
+    temp_data.qvel[:n_joints] = 0  # zero velocity for gravity compensation
+    mujoco.mj_forward(model, temp_data)
+    gravity_comp = -temp_data.qfrc_bias[:n_joints].copy()
 
     def cost_function(u_seq_flat):
         temp_data = mujoco.MjData(model)
@@ -40,22 +47,20 @@ def mpc_control(model, data, target_pos, horizon=10):
             # Get end-effector position
             ee_pos = get_ee_position(model, temp_data)
 
-            # quick sanity check: skip unreachable or trivial targets
-            dist = np.linalg.norm(ee_pos - target_pos)
-            if dist < 0.05 or dist > 1.0:
-                continue
-
-            # calculate cost
-            tracking_error = np.sum((ee_pos - target_pos) ** 2)
+            # calculate cost with exponentially increasing weight on tracking
+            # Weight increases toward the end of the horizon
+            tracking_weight = 50.0 * (1 + t / horizon)
+            tracking_error = tracking_weight * np.sum((ee_pos - target_pos) ** 2)
             control_effort = 0.01 * np.sum(u_seq[t] ** 2)
             total_cost += tracking_error + control_effort
 
         return total_cost
 
-    u_init = np.zeros(horizon * n_joints)
+    # Initialize with gravity compensation
+    u_init = np.tile(gravity_comp, horizon)
 
-    # bounds for torques
-    bounds = [(-5.0, 5.0)] * (horizon * n_joints)
+    # Increased bounds for faster motion
+    bounds = [(-10.0, 10.0)] * (horizon * n_joints)
 
     # solve the optimization problem
     result = minimize(
@@ -67,9 +72,9 @@ def mpc_control(model, data, target_pos, horizon=10):
         # return the first torque command (receding horizon principle)
         return u_seq_opt[0]
     else:
-        # fallback to zero torque if optimization fails
-        print("MPC optimization failed.")
-        return np.zeros(n_joints)
+        # fallback to gravity compensation if optimization fails
+        print("MPC optimization failed, using gravity compensation.")
+        return gravity_comp
 
 
 def generate_dataset(
@@ -97,16 +102,17 @@ def generate_dataset(
 
     for i in range(num_samples):
         # random target in the reachable space
-        target_pos = np.random.uniform([0.2, -0.4, 0.1], [0.7, 0.4, 0.6])
+        # arm total length ~ 0.85m, positioned at height 0.05m
+        target_pos = np.random.uniform([0.15, -0.5, 0.2], [0.6, 0.5, 0.8])
 
         # random initial state
         for j in range(n_joints):
             data.qpos[j] = np.random.uniform(*joint_ranges[j])
-        data.qvel[:n_joints] = np.random.uniform(-1, 1, n_joints)
+        data.qvel[:n_joints] = np.random.uniform(-0.5, 0.5, n_joints)
         mujoco.mj_forward(model, data)
 
-        # MPC control
-        torque = mpc_control(model, data, target_pos, horizon=10)
+        # MPC control - uses default horizon of 30
+        torque = mpc_control(model, data, target_pos)
 
         # input: [joint_pos, joint_vel, target_pos]
         inputs[i, :n_joints] = data.qpos[:n_joints]
