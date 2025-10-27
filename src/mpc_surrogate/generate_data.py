@@ -24,35 +24,40 @@ def forward_kinematics(q):
     Returns:
         End-effector position [x, y, z]
     """
-    # Link lengths
-    L1 = 0.3  # Height of link 1
-    L2 = 0.3  # Length of link 2
-    L3 = 0.25  # Length of link 3
-    
-    # Base height
-    base_height = 0.1
-    
-    # Forward kinematics
-    # Joint 1 rotates around Z
-    # Joints 2 and 3 rotate around Y (in rotated frame)
-    
+    # Link lengths and base height (from MuJoCo XML)
+    base_height = 0.05  # base_platform pos z
+    L1 = 0.3           # link1 height (link1 body pos z)
+    L2 = 0.3           # link2 length (link2 body pos z)
+    L3 = 0.25          # link3 length (link3 body pos z)
+
     if isinstance(q, np.ndarray):
         cos = np.cos
         sin = np.sin
     else:
         cos = ca.cos
         sin = ca.sin
-    
-    # Horizontal reach in XY plane
-    horizontal_reach = L2 * cos(q[1]) + L3 * cos(q[1] + q[2])
-    
-    # X and Y from base rotation
-    x = horizontal_reach * cos(q[0])
-    y = horizontal_reach * sin(q[0])
-    
-    # Z is sum of base height, link1 height, and vertical components
-    z = base_height + L1 + L2 * sin(q[1]) + L3 * sin(q[1] + q[2])
-    
+
+    # The base of link1 is at (0, 0, base_height)
+    # The top of link1 is at (0, 0, base_height + L1)
+    # Joint 1 (q[0]) rotates around Z at base
+    # Joint 2 (q[1]) rotates around Y at shoulder (top of link1)
+    # Joint 3 (q[2]) rotates around Y at elbow (end of link2)
+
+    # Position after link1 (shoulder position)
+    shoulder_z = base_height + L1
+
+    # Compute position of end effector relative to shoulder
+    # In the shoulder frame:
+    #   - X' = L2 * cos(q2) + L3 * cos(q2 + q3)
+    #   - Z' = L2 * sin(q2) + L3 * sin(q2 + q3)
+    x_sh = L2 * cos(q[1]) + L3 * cos(q[1] + q[2])
+    z_sh = L2 * sin(q[1]) + L3 * sin(q[1] + q[2])
+
+    # Rotate by base (q[0]) around Z
+    x = x_sh * cos(q[0])
+    y = x_sh * sin(q[0])
+    z = shoulder_z + z_sh
+
     if isinstance(q, np.ndarray):
         return np.array([x, y, z])
     else:

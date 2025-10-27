@@ -62,9 +62,9 @@ def replay_random_sample(xml_path, h5_path, mode="precomputed"):
         print(f"Pre-computed torques: {precomputed_torques}\n")
     
     if mode == "mpc":
-        # Import MPC controller only if needed
-        from mpc_surrogate.generate_data import mpc_control
-        mpc_update_interval = 100  # Recompute MPC every N steps (increase for faster playback)
+        # Import Jacobian controller only if needed
+        from mpc_surrogate.generate_data_jacobian import operational_space_control
+        mpc_update_interval = 1  # Recompute control every step for smooth motion
     
     with mujoco.viewer.launch_passive(model, data) as viewer:
         print("Viewer ready. Press Ctrl+C to exit.\n")
@@ -79,19 +79,18 @@ def replay_random_sample(xml_path, h5_path, mode="precomputed"):
         torques = precomputed_torques if mode == "precomputed" else np.zeros(n_joints)
         
         # Run simulation (increase steps for longer simulation time)
-        num_steps = 3000  # 3 seconds at 0.001s timestep
+        num_steps = 5000  # 5 seconds at 0.001s timestep
         start_time = time.time()
         
-        # For MPC mode, don't wait in real-time - run as fast as possible
-        use_realtime = (mode == "precomputed")
+        # Always use real-time playback so we can see the motion
+        use_realtime = True
         
         for step in range(num_steps):
             step_start = time.time()
             
-            # Recompute MPC periodically if in MPC mode
+            # Recompute control periodically if in MPC mode
             if mode == "mpc" and step % mpc_update_interval == 0:
-                print(f"Recomputing MPC at step {step}...")
-                torques = mpc_control(model, data, target_pos, horizon=20)
+                torques = operational_space_control(model, data, target_pos, kp=200.0, kd=40.0)
             
             # Apply torques and step simulation
             data.ctrl[:n_joints] = torques
@@ -100,14 +99,14 @@ def replay_random_sample(xml_path, h5_path, mode="precomputed"):
             # Sync viewer
             viewer.sync()
             
-            # Sleep to maintain real-time playback only in precomputed mode
+            # Sleep to maintain real-time playback
             if use_realtime:
                 time_until_next_step = model.opt.timestep - (time.time() - step_start)
                 if time_until_next_step > 0:
                     time.sleep(time_until_next_step)
             
-            # Print progress every 100 steps
-            if step % 100 == 0:
+            # Print progress every 500 steps (every 0.5 seconds)
+            if step % 500 == 0:
                 ee_pos = get_ee_position(model, data)
                 distance = np.linalg.norm(ee_pos - target_pos)
                 print(f"Step {step}: EE at {ee_pos}, distance to target: {distance:.4f}m")
@@ -118,11 +117,11 @@ def replay_random_sample(xml_path, h5_path, mode="precomputed"):
 
 if __name__ == "__main__":
     XML_FILE = "models/3dof_arm.xml"
-    H5_FILE = "data/mpc_3dof_dataset.h5"
+    H5_FILE = "data/mpc_3dof_dataset_jacobian.h5"  # Use new Jacobian dataset
     
     # Choose mode:
     # "precomputed" - Fast, uses stored torques from dataset (won't reach target, just shows initial action)
-    # "mpc" - Recomputes MPC in closed-loop (proper tracking behavior)
+    # "mpc" - Recomputes control in closed-loop (proper tracking behavior)
     
     MODE = "mpc"  # Use MPC mode for proper target reaching behavior
     
