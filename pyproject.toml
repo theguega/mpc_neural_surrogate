@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Approximating Model Predictive Control policies using neural networks"
 readme = "README.md"
 authors = [
-    { name = "Theo", email = "130441797+theguega@users.noreply.github.com" }
+    { name = "Theo", email = "130441797+theguega@users.noreply.github.com" },
+    { name = "Dexter", email = "137589600+dexterteo4@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
 
@@ -18,6 +19,9 @@ dependencies = [
     "tqdm>=4.66.0",
     "pyyaml>=6.0.0",
     "scikit-learn>=1.7.2",
+    "do-mpc>=4.6.5",
+    "casadi>=3.6.7",
+    
 ]
 
 [project.optional-dependencies]

@@ -56,8 +56,8 @@
               <geom name="ee_geom" type="sphere" size="0.04" rgba="1 0.8 0 1"/>
               <inertial pos="0 0 0" mass="0.1" diaginertia="0.0001 0.0001 0.0001"/>
 
-              <!-- Site for end effector position tracking -->
-              <site name="ee_site" pos="0 0 0" size="0.01" rgba="1 0 0 1"/>
+              <!-- Site for end effector position tracking - at the tip of the sphere -->
+              <site name="ee_site" pos="0 0 0.04" size="0.01" rgba="1 0 0 1"/>
             </body>
           </body>
         </body>
