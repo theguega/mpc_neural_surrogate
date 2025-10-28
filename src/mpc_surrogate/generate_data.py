@@ -137,12 +137,11 @@ def setup_do_mpc_controller(target_pos, horizon=30):
     ee_pos = forward_kinematics(q)
     target = ca.DM(target_pos)
     
-    # Terminal cost: heavily penalize tracking error at end of horizon
-    mterm = 500.0 * ca.sumsqr(ee_pos - target)
-    
-    # Stage cost: tracking error + control effort + velocity regularization
-    lterm = 200.0 * ca.sumsqr(ee_pos - target) + 0.001 * ca.sumsqr(u) + 0.1 * ca.sumsqr(dq)
-    
+
+    # Stronger cost for faster, more aggressive movement
+    mterm = 3000.0 * ca.sumsqr(ee_pos - target)
+    lterm = 1500.0 * ca.sumsqr(ee_pos - target) + 0.0001 * ca.sumsqr(u) + 0.01 * ca.sumsqr(dq)
+
     mpc.set_objective(mterm=mterm, lterm=lterm)
     
     # Control bounds (match XML actuator limits)
@@ -184,12 +183,12 @@ def mpc_control(model, data, target_pos, horizon=30):
     
     # Setup do-mpc controller
     mpc = setup_do_mpc_controller(target_pos, horizon)
-    
+
     # Set initial state
     x0 = np.concatenate([q0, dq0])
     mpc.x0 = x0
     mpc.set_initial_guess()
-    
+
     # Solve MPC problem
     try:
         u_opt = mpc.make_step(x0)
@@ -232,7 +231,7 @@ def generate_dataset(
     # Total arm reach: L2 + L3 = 0.3 + 0.25 = 0.55m max horizontal
     # Base height + L1 = 0.1 + 0.3 = 0.4m base
     max_reach = 0.55
-    min_reach = 0.1  # Minimum distance from base
+    min_reach = 0.25  # Minimum distance from base (avoid targets too close to arm)
     
     i = 0
     attempts = 0

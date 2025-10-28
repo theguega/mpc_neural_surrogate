@@ -115,7 +115,7 @@ def generate_dataset(
     
     # Arm parameters for reachability check
     max_reach = 0.55
-    min_reach = 0.1
+    min_reach = 0.25  # Minimum distance from base (avoid targets too close to arm)
     
     i = 0
     attempts = 0
