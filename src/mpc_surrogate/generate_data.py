@@ -12,64 +12,136 @@ def get_ee_position(model, data):
     return data.site_xpos[site_id].copy()
 
 
-def mpc_control(model, data, target_pos, horizon=10):
+def mpc_control(model, data, target_pos, horizon=10, dt=0.01, n_joints=3):
     """
-    MPC controller using MuJoCo's mj_step for accurate dynamics prediction.
-    Optimizes a sequence of torques over a short horizon.
+    Simple MPC: optimize torque sequence over horizon to minimize
+    end-effector tracking error and control effort.
     """
-    n_joints = 3
+    import mujoco
+    import numpy as np
 
-    # store the initial state to reset to it for each optimization iteration
+    # Get current state
     q0 = data.qpos[:n_joints].copy()
-    dq0 = data.qvel[:n_joints].copy()
+    qd0 = data.qvel[:n_joints].copy()
 
-    def cost_function(u_seq_flat):
-        temp_data = mujoco.MjData(model)
-        temp_data.qpos[:n_joints] = q0
-        temp_data.qvel[:n_joints] = dq0
-        mujoco.mj_forward(model, temp_data)
+    # Create a separate data instance for rollouts
+    data_sim = mujoco.MjData(model)
 
-        total_cost = 0.0
-        u_seq = u_seq_flat.reshape((horizon, n_joints))
+    # Torque limits
+    torque_limit = 5.0
+
+    # Weight matrices
+    Q_pos = 10000.0  # End-effector position tracking weight
+    Q_final = 50000.0  # Extra weight on final position
+    R = 0.01  # Very small control effort penalty
+
+    def rollout_dynamics(torques, q_init, qd_init):
+        """
+        Simulate forward dynamics over horizon using mj_step.
+        """
+        torques = torques.reshape(horizon, n_joints)
+
+        # Initialize simulation state
+        data_sim.qpos[:n_joints] = q_init
+        data_sim.qvel[:n_joints] = qd_init
+
+        # Zero out other DOFs if any
+        if len(data_sim.qpos) > n_joints:
+            data_sim.qpos[n_joints:] = 0
+            data_sim.qvel[n_joints:] = 0
+
+        ee_positions = []
 
         for t in range(horizon):
-            # apply control and step the simulation
-            temp_data.ctrl[:n_joints] = u_seq[t]
-            mujoco.mj_step(model, temp_data)
+            # Apply control
+            data_sim.ctrl[:n_joints] = torques[t]
+
+            # Step the simulation
+            mujoco.mj_step(model, data_sim)
 
             # Get end-effector position
-            ee_pos = get_ee_position(model, temp_data)
+            ee_pos = get_ee_position(model, data_sim)
+            ee_positions.append(ee_pos)
 
-            # quick sanity check: skip unreachable or trivial targets
-            dist = np.linalg.norm(ee_pos - target_pos)
-            if dist < 0.05 or dist > 1.0:
-                continue
+        return np.array(ee_positions)
 
-            # calculate cost
-            tracking_error = np.sum((ee_pos - target_pos) ** 2)
-            control_effort = 0.01 * np.sum(u_seq[t] ** 2)
-            total_cost += tracking_error + control_effort
+    def cost_function(torques):
+        """
+        Compute total cost: tracking error + control effort
+        """
+        try:
+            ee_trajectory = rollout_dynamics(torques, q0, qd0)
 
-        return total_cost
+            # Tracking cost: all timesteps
+            tracking_cost = 0.0
+            for ee_pos in ee_trajectory[:-1]:
+                error = ee_pos - target_pos
+                tracking_cost += Q_pos * np.sum(error**2)
 
-    u_init = np.zeros(horizon * n_joints)
+            # Final position cost (heavily weighted)
+            final_error = ee_trajectory[-1] - target_pos
+            final_cost = Q_final * np.sum(final_error**2)
 
-    # bounds for torques
-    bounds = [(-5.0, 5.0)] * (horizon * n_joints)
+            # Control effort cost
+            torques_reshaped = torques.reshape(horizon, n_joints)
+            control_cost = R * np.sum(torques_reshaped**2)
 
-    # solve the optimization problem
-    result = minimize(
-        cost_function, u_init, method="L-BFGS-B", bounds=bounds, options={"maxiter": 50}
-    )
+            return tracking_cost + final_cost + control_cost
+        except Exception as e:
+            print(f"Simulation failed with error: {e}")
+            return 1e10  # Return large cost if simulation fails
 
-    if result.success:
-        u_seq_opt = result.x.reshape((horizon, n_joints))
-        # return the first torque command (receding horizon principle)
-        return u_seq_opt[0]
-    else:
-        # fallback to zero torque if optimization fails
-        print("MPC optimization failed.")
-        return np.zeros(n_joints)
+    # Compute initial guess using inverse kinematics heuristic
+    current_ee = get_ee_position(model, data)
+    error = target_pos - current_ee
+    error_norm = np.linalg.norm(error)
+
+    # Multiple random restarts to escape local minima
+    best_result = None
+    best_cost = np.inf
+
+    n_restarts = 3
+    for restart in range(n_restarts):
+        if restart == 0:
+            # First try: aggressive movement toward target
+            u0 = np.zeros(horizon * n_joints)
+            if error_norm > 0.01:
+                for t in range(horizon):
+                    # Joint 1: rotate toward target x-y position
+                    if abs(error[0]) > 0.01 or abs(error[1]) > 0.01:
+                        u0[t * n_joints] = np.sign(error[0]) * 3.0
+
+                    # Joints 2 & 3: adjust height
+                    if abs(error[2]) > 0.01:
+                        u0[t * n_joints + 1] = -np.sign(error[2]) * 3.0
+                        u0[t * n_joints + 2] = -np.sign(error[2]) * 3.0
+        else:
+            # Random restarts with decreasing magnitude
+            u0 = np.random.randn(horizon * n_joints) * (3.0 / restart)
+
+        # Clip to bounds
+        u0 = np.clip(u0, -torque_limit, torque_limit)
+
+        # Optimize
+        result = minimize(
+            cost_function,
+            u0,
+            method="SLSQP",
+            bounds=[(-torque_limit, torque_limit)] * (horizon * n_joints),
+            options={"maxiter": 150, "ftol": 1e-5},
+        )
+
+        if result.fun < best_cost:
+            best_cost = result.fun
+            best_result = result
+
+    # Return the first control action from best result
+    optimal_torques = best_result.x.reshape(horizon, n_joints)
+
+    # Debug: print first torque to verify it's non-zero
+    # print(f"First torque: {optimal_torques[0]}, cost: {best_cost:.2f}")
+
+    return optimal_torques[0]
 
 
 def generate_dataset(
@@ -83,6 +155,7 @@ def generate_dataset(
     """
     model = mujoco.MjModel.from_xml_path(xml_path)
     data = mujoco.MjData(model)
+    dt = model.opt.timestep
 
     n_joints = 3
 
@@ -106,7 +179,7 @@ def generate_dataset(
         mujoco.mj_forward(model, data)
 
         # MPC control
-        torque = mpc_control(model, data, target_pos, horizon=10)
+        torque = mpc_control(model, data, target_pos, horizon=10, dt=dt)
 
         # input: [joint_pos, joint_vel, target_pos]
         inputs[i, :n_joints] = data.qpos[:n_joints]

@@ -63,6 +63,7 @@ def replay_random_sample(xml_path, h5_path):
         print("Playing...")
         start = time.time()
         while viewer.is_running() and time.time() - start < 10:
+            print(f"EE position : {get_ee_position(model, data)}")
             step_start = time.time()
             data.ctrl[:n_joints] = torque
             mujoco.mj_step(model, data)
