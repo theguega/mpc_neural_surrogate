@@ -13,10 +13,8 @@ dependencies = [
     "matplotlib>=3.10.6",
     "mujoco>=3.3.6",
     "numpy>=2.3.3",
-    "pre-commit>=4.3.0",
     "scipy>=1.16.2",
     "tqdm>=4.66.0",
-    "pyyaml>=6.0.0",
     "scikit-learn>=1.7.2",
     "casadi>=3.7.2",
 ]
@@ -35,7 +33,7 @@ dev = [
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
