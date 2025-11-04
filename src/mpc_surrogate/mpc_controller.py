@@ -12,7 +12,9 @@ class MPCController:
         self.q_dot = ca.SX.sym("q_dot", 3)  # joint velocities
         self.tau = ca.SX.sym("tau", 3)  # control inputs (torques)
 
-        q_ddot = self.tau  # simple dynamics: acceleration = torque
+        # Simplified dynamics model: assumes unit mass and no gravity
+        # Gravity compensation should be added externally when applying torques
+        q_ddot = self.tau
 
         # state and input vectors
         x = ca.vertcat(self.q, self.q_dot)
@@ -31,10 +33,10 @@ class MPCController:
 
         cost = 0
 
-        # cost matrices
-        Q = np.diag([80, 80, 80, 10, 10, 10])  # state error weight
-        R = np.diag([0.5, 0.5, 0.5])  # input weight
-        Q_N = np.diag([500, 500, 500, 50, 50, 50])  # terminal cost
+        # cost matrices - increased position weights to prioritize reaching target
+        Q = np.diag([200, 200, 200, 5, 5, 5])  # state error weight (position >> velocity)
+        R = np.diag([0.1, 0.1, 0.1])  # input weight (lower to allow larger torques)
+        Q_N = np.diag([1000, 1000, 1000, 50, 50, 50])  # terminal cost (high position penalty)
 
         # stage cost
         for k in range(self.N):
@@ -58,6 +60,12 @@ class MPCController:
         for k in range(self.N):
             self.opti.subject_to(self.x[:, k + 1] == self.f(self.x[:, k], self.u[:, k]))
         self.opti.subject_to(self.x[:, 0] == self.p)  # initial state constraint
+
+        # Add torque limits to prevent unrealistic commands
+        tau_max = 50.0  # Maximum torque per joint
+        for k in range(self.N):
+            self.opti.subject_to(self.u[:, k] <= tau_max)
+            self.opti.subject_to(self.u[:, k] >= -tau_max)
 
         # solver options
         solver_opts = {

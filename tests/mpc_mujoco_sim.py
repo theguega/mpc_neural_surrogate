@@ -67,7 +67,13 @@ def run_visual_test_three_targets():
             if not solved:
                 tau_mpc = np.zeros(n_joints)
 
+            # Add gravity compensation (MPC uses simplified dynamics without gravity)
             total_tau = tau_mpc + env.data.qfrc_bias
+            
+            # Debug: print joint error occasionally
+            if step % 100 == 0 and ee_error > 0.03:
+                joint_error = np.linalg.norm(current_state[:3] - joint_target)
+                print(f"  Joint target: {joint_target}, Current: {current_state[:3]}, Joint error: {joint_error:.3f}")
 
             # Step simulation
             for _ in range(n_sim_steps_per_mpc_step):
