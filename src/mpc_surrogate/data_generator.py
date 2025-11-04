@@ -35,16 +35,11 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
     for episode in tqdm(range(num_episodes), desc="Episodes"):
         obs = env.reset()
         target_joint_pos = obs[:3].copy()
+        # generate the first target of the episode
+        target_xyz = sample_reachable_target()
+        target_joint_pos = solve_inverse_kinematics(env, target_xyz)
 
         for step in tqdm(range(episode_length), desc="Steps", leave=False):
-            # Occasionally sample a new target
-            if np.random.rand() < 0.05:
-                target_xyz = sample_reachable_target()
-                target_joint_pos = solve_inverse_kinematics(env, target_xyz)
-            else:
-                site_id = env.model.site("ee_site").id
-                target_xyz = env.data.site_xpos[site_id].copy()
-
             current_state = obs[:6]  # [q1, q2, q3, q̇1, q̇2, q̇3]
 
             tau_mpc, solved = controller.solve(current_state, target_joint_pos)
@@ -56,7 +51,7 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
                 all_states.append(current_state)
                 all_targets.append(target_xyz)
                 # we want learn the MPC policy, not the torque from MPC + the static torque given by MuJoCo
-                all_actions.append(tau_mpc)
+                all_actions.append(total_tau)
 
                 for _ in range(n_sim_steps_per_mpc_step):
                     obs, _, _, _ = env.step(total_tau)
@@ -77,4 +72,4 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
 
 
 if __name__ == "__main__":
-    generate_data(num_episodes=100, episode_length=150)
+    generate_data(num_episodes=20, episode_length=150)

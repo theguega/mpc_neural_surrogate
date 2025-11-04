@@ -6,7 +6,7 @@ from mpc_surrogate.utils import solve_inverse_kinematics
 
 def test_inverse_kinematics():
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
-    target_xyz = np.array([0.35, 0.15, 0.35])  # target to reach
+    target_xyz = np.array([-0.4, 0.1, 0.40])  # target to reach
 
     q_sol = solve_inverse_kinematics(env, target_xyz)
     print("IK solution joint angles:", q_sol)
