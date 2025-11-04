@@ -22,6 +22,11 @@
     <light directional="true" diffuse="0.6 0.6 0.6" specular="0.3 0.3 0.3" pos="0 0 4" dir="0 0 -1"/>
     <light directional="true" diffuse="0.4 0.4 0.4" specular="0.2 0.2 0.2" pos="1 1 4" dir="0 0 -1"/>
 
+    <!-- Target position marker (mocap body) -->
+    <body name="target" mocap="true" pos="0 0 0.5">
+      <geom name="target_geom" type="sphere" size="0.05" rgba="1 0 0 0.5" contype="0" conaffinity="0"/>
+    </body>
+
     <!-- Base platform -->
     <body name="base_platform" pos="0 0 0.05">
       <geom name="base_geom" type="box" size="0.15 0.15 0.05" rgba="0.3 0.3 0.3 1"/>

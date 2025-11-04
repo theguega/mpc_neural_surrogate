@@ -27,6 +27,11 @@ def run_visual_test_static_target():
     joint_target = solve_inverse_kinematics(env, target_pos)
     print("Computed joint target (IK):", joint_target)
 
+    # Set the target marker position
+    target_body_id = env.model.body("target").id
+    env.model.body_mocapid[target_body_id] = 0
+    env.data.mocap_pos[0] = target_pos
+
     with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
         for step in range(500):
             # True current EE position in simulation
