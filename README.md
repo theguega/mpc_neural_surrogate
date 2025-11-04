@@ -58,6 +58,7 @@ We can generate a dataset for learning to imitate a Model Predictive Controller 
 
      * The current state `[q1, q2, q3, q̇1, q̇2, q̇3]` is recorded.
      * MPC computes the torque `τ_mpc` to move toward the target joint positions.
+     * We are taking the torque `τ_mpc` for our dataset.
      * Total torque is calculated as `τ_total = τ_mpc + qfrc_bias` to include static dynamics effects such as gravity and friction.
      * The simulation is stepped forward using `τ_total` for the appropriate number of simulation steps per MPC step.
    * If the MPC fails to solve, the step is skipped.
@@ -68,7 +69,7 @@ We can generate a dataset for learning to imitate a Model Predictive Controller 
 
      * `states`: joint positions and velocities, shape `(num_samples, 6)`
      * `targets`: end-effector target positions, shape `(num_samples, 3)`
-     * `actions`: total torques applied, shape `(num_samples, 3)`
+     * `actions`: MPC torques applied, shape `(num_samples, 3)`
 
 ---
 

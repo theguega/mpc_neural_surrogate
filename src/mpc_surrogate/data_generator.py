@@ -55,7 +55,8 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
 
                 all_states.append(current_state)
                 all_targets.append(target_xyz)
-                all_actions.append(total_tau)
+                # we want learn the MPC policy, not the torque from MPC + the static torque given by MuJoCo
+                all_actions.append(tau_mpc)
 
                 for _ in range(n_sim_steps_per_mpc_step):
                     obs, _, _, _ = env.step(total_tau)
