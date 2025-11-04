@@ -1,3 +1,4 @@
+
 import h5py
 import numpy as np
 from tqdm import tqdm
@@ -6,16 +7,73 @@ from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
 
+# episode length for use globally
+episode_length = 50
 
-def sample_reachable_target(link_lengths=(0.3, 0.3, 0.25)):
+
+def sample_reachable_target(env, link_lengths=(0.3, 0.3, 0.25), max_attempts=50):
+    """
+    Sample a reachable target position using rejection sampling.
+    Validates reachability by attempting IK and checking the solution quality.
+    
+    Args:
+        env: MuJoCo environment (needed for IK validation)
+        link_lengths: Tuple of (link1, link2, link3) lengths
+        max_attempts: Maximum number of sampling attempts before giving up
+    
+    Returns:
+        np.array: A validated reachable target position [x, y, z]
+    """
     LINK1, LINK2, LINK3 = link_lengths
-    MAX_REACH = LINK1 + LINK2 + LINK3 - 0.05
-    MIN_REACH = 0.15  # avoid near-base singularities
-
-    r = np.random.uniform(MIN_REACH, MAX_REACH)
-    theta = np.random.uniform(-np.pi / 2, np.pi / 2)
-    z = np.random.uniform(0.05, 0.55)
-    return np.array([r * np.cos(theta), r * np.sin(theta), z])
+    BASE_HEIGHT = 0.1  # Base platform height
+    
+    # Conservative workspace bounds based on robot geometry and joint limits
+    # joint2 range: [-1.57, 1.57] (±90°), joint3 range: [-2.0, 2.0]
+    MAX_REACH = LINK1 + LINK2 + LINK3 - 0.15  # Leave margin for joint limits
+    MIN_REACH = 0.225  # Avoid singularities near base
+    
+    for attempt in range(max_attempts):
+        # Sample in cylindrical coordinates for more uniform workspace coverage
+        r_xy = np.random.uniform(MIN_REACH, MAX_REACH * 0.75)  # Stay within comfortable reach
+        theta = np.random.uniform(-np.pi / 2 + 0.1, np.pi / 2 - 0.1)  # Front hemisphere with margin
+        
+        # Z should be reachable: from slightly above base to reasonable maximum height
+        z_min = BASE_HEIGHT + 0.125  # Avoid ground-level targets
+        z_max = BASE_HEIGHT + LINK1 + LINK2 * 0.9  # Conservative vertical limit
+        z = np.random.uniform(z_min, min(z_max, 0.65))
+        
+        target_xyz = np.array([r_xy * np.cos(theta), r_xy * np.sin(theta), z])
+        
+        # Validate with IK - check if solution converges to actual target
+        try:
+            joint_solution = solve_inverse_kinematics(env, target_xyz, max_iters=200, tol=5e-3)
+            
+            # Verify the IK solution actually reaches the target
+            tmp_data = env.data  # Use a temporary copy to test
+            original_qpos = tmp_data.qpos.copy()
+            
+            tmp_data.qpos[:3] = joint_solution
+            import mujoco
+            mujoco.mj_forward(env.model, tmp_data)
+            
+            site_id = env.model.site("ee_site").id
+            achieved_pos = tmp_data.site_xpos[site_id].copy()
+            error = np.linalg.norm(achieved_pos - target_xyz)
+            
+            # Restore original state
+            tmp_data.qpos[:] = original_qpos
+            mujoco.mj_forward(env.model, tmp_data)
+            
+            # Accept if error is small (IK successfully reached the target)
+            if error < 0.01:  # 1cm tolerance
+                return target_xyz
+                
+        except Exception:
+            continue  # Try again if IK fails
+    
+    # Fallback to a known safe position if all attempts fail
+    print(f"Warning: Could not find reachable target after {max_attempts} attempts. Using safe default.")
+    return np.array([-0.4, 0.1, 0.4])
 
 
 def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc_dataset.h5"):
@@ -25,6 +83,7 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
     Targets : end-effector (EE) target positions
     Actions : total torques (MPC + static bias)
     """
+
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
     controller = MPCController(dt=0.05, prediction_horizon=20)
     n_sim_steps_per_mpc_step = int(controller.dt / env.model.opt.timestep)
@@ -36,7 +95,7 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
         obs = env.reset()
         target_joint_pos = obs[:3].copy()
         # generate the first target of the episode
-        target_xyz = sample_reachable_target()
+        target_xyz = sample_reachable_target(env)
         target_joint_pos = solve_inverse_kinematics(env, target_xyz)
 
         for step in tqdm(range(episode_length), desc="Steps", leave=False):
@@ -72,4 +131,4 @@ def generate_data(num_episodes=100, episode_length=150, filename="data/robot_mpc
 
 
 if __name__ == "__main__":
-    generate_data(num_episodes=20, episode_length=150)
+    generate_data(num_episodes=20, episode_length=episode_length)

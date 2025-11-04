@@ -5,6 +5,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
+from mpc_surrogate.data_generator import episode_length
 
 
 def replay_dataset(filename="data/robot_mpc_dataset.h5", slow_factor=1.0):
@@ -59,7 +60,7 @@ def replay_dataset(filename="data/robot_mpc_dataset.h5", slow_factor=1.0):
             env.render(viewer)
             time.sleep(env.model.opt.timestep * n_sim_steps_per_mpc_step * slow_factor)
 
-            if i % 100 == 0:
+            if i % (episode_length - 1) == 0:
                 ee_pos = env.get_ee_position()
                 dist = np.linalg.norm(ee_pos - target_pos)
                 print(f"Step {i}: EE pos = {ee_pos}, Target = {target_pos}, Error = {dist:.3f}")
