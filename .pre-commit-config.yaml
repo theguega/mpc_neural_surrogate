@@ -10,3 +10,11 @@ repos:
       - id: ruff
         args: [--fix]
       - id: ruff-format
+  - repo: local
+    hooks:
+      - id: compile-typst
+        name: Compile Typst report
+        entry: make
+        language: system
+        pass_filenames: false
+        files: ^report/.*\.typ$
