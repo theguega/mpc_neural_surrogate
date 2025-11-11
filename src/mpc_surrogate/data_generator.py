@@ -33,14 +33,15 @@ def sample_reachable_target(env, link_lengths=(0.3, 0.3, 0.25), max_attempts=50)
     MIN_REACH = 0.225  # Avoid singularities near base
     
     for attempt in range(max_attempts):
-        # Sample in cylindrical coordinates for more uniform workspace coverage
-        r_xy = np.random.uniform(MIN_REACH, MAX_REACH * 0.75)  # Stay within comfortable reach
-        theta = np.random.uniform(-np.pi / 2 + 0.1, np.pi / 2 - 0.1)  # Front hemisphere with margin
-        
+        # Sample in cylindrical coordinates for uniform workspace coverage around the robot
+        # Allow full 360° around the base (theta in [0, 2pi))
+        r_xy = np.random.uniform(MIN_REACH, MAX_REACH * 0.95)
+        theta = np.random.uniform(0, 2 * np.pi)
+
         # Z should be reachable: from slightly above base to reasonable maximum height
-        z_min = BASE_HEIGHT + 0.125  # Avoid ground-level targets
-        z_max = BASE_HEIGHT + LINK1 + LINK2 * 0.9  # Conservative vertical limit
-        z = np.random.uniform(z_min, min(z_max, 0.65))
+        z_min = BASE_HEIGHT + 0.08  # Allow lower targets closer to base but avoid ground contact
+        z_max = BASE_HEIGHT + LINK1 + LINK2 * 0.95  # Conservative vertical limit near max reach
+        z = np.random.uniform(z_min, min(z_max, 0.7))
         
         target_xyz = np.array([r_xy * np.cos(theta), r_xy * np.sin(theta), z])
         
