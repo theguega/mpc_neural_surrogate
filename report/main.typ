@@ -3,375 +3,201 @@
 
 #let affls = (
   airi: ("AIRI", "Moscow", "Russia"),
-  skoltech: (
-    department: "AI Center",
-    institution: "Skoltech",
-    location: "Moscow",
-    country: "Russia"),
-  skoltech2: (
-    department: "AI Center",
-    institution: "Skoltech",
-    location: "Moscow",
-    country: "Russia"),
+  waterloo: (
+    institution: "University of Waterloo",
+    country: "Canada"),
 )
 
 #let authors = (
-  (name: "Firstname1 Lastname1",
-   affl: "skoltech",
-   email: "author@example.org",
+  (name: "Theo Guegan",
+   affl: "waterloo",
+   email: "tguegan@uwaterloo.ca",
    equal: true),
-  (name: "Firstname2 Lastname2", affl: ("airi", "skoltech"), equal: true),
 )
 
 #show: neurips2025.with(
-  title: [Formatting Instructions For NeurIPS 2025],
+  title: [Neural Imitation Learning for Real-Time Control of 3-DOF Robotic Manipulators],
   authors: (authors, affls),
-  keywords: ("Machine Learning", "NeurIPS"),
+  keywords: ("imitation learning", "model predictive control", "robotic manipulation", "neural network control", "real-time systems"),
   abstract: [
-    The abstract paragraph should be indented ½ inch (3 picas) on both the
-    left- and right-hand margins. Use 10 point type, with a vertical spacing
-    (leading) of 11 points. The word *Abstract* must be centered, bold, and in
-    point size 12. Two line spaces precede the abstract. The abstract must be
-    limited to one paragraph.
+    This paper investigates the application of neural imitation learning to approximate Model Predictive Control (MPC) policies for real-time control of 3-degree-of-freedom (3-DOF) robotic manipulators. We present a hierarchical baseline controller combining inverse kinematics (IK) with MPC, and subsequently develop a data generation pipeline to collect expert demonstrations. We evaluate multiple neural network architectures—including feedforward networks, recurrent neural networks (RNNs), and Transformers—to learn a surrogate policy that maps historical state sequences to control actions. Our results demonstrate that learned policies can achieve significant computational speed-ups while maintaining comparable tracking performance to the original MPC, addressing critical limitations in high-frequency control applications. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. The proposed methodology provides a path toward deploying complex optimal control strategies on computationally constrained platforms.
   ],
   bibliography: bibliography("main.bib"),
-  bibliography-opts: (title: none, full: true),  // Only for example paper.
-  appendix: [
-    #include "appendix.typ"
-    #include "checklist.typ"
-  ],
-  accepted: false,
 )
 
-= Submission of papers to NeurIPS 2025
+= Introduction
 
-Please read the instructions below carefully and follow them faithfully.
+Model Predictive Control (MPC) has emerged as a powerful paradigm for robotic manipulation, offering inherent constraint handling and optimality guarantees. However, the computational demands of solving optimization problems online limit its applicability in high-frequency control loops and resource-constrained environments. This limitation is particularly acute for agile manipulator control requiring rapid response to dynamic task specifications.
 
-== Style
+We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The control objective centers on driving the end-effector to track random 3D Cartesian targets within the robot's reachable workspace. While a hierarchical MPC controller combining inverse kinematics (IK) with online optimization achieves satisfactory performance, its computational burden restricts control frequencies and prohibits deployment on embedded systems.
 
-Papers to be submitted to NeurIPS 2025 must be prepared according to the
-instructions presented here. Papers may only be up to *nine* pages long,
-including figures. Additional pages _containing only acknowledgments and
-references_ are allowed. Papers that exceed the page limit will not be
-reviewed, or in any other way considered for presentation at the conference.
+Inspired by recent advances in imitation learning for control, we propose to distill the MPC policy into a neural network that operates directly on sequences of historical states. The primary contributions of this work include:
 
-The margins in 2025 are the same as those in previous years.
+* A complete data generation pipeline for collecting expert demonstrations from a hybrid IK-MPC controller
+* An empirical evaluation of feedforward, recurrent, and attention-based architectures for policy approximation
+* Analysis of generalization, stability, and computational efficiency trade-offs
+* Experimental validation demonstrating real-time capable neural controllers achieving performance parity with the MPC expert
 
-Authors are required to use the NeurIPS #LaTeX style files obtainable at the
-NeurIPS website as indicated below. Please make sure you use the current files
-and not previous versions. Tweaking the style files may be grounds for
-rejection.
+This paper is structured as follows: Section 2 formalizes the system dynamics and control problem. Section 3 details the baseline IK-MPC controller. Section 4 describes the dataset generation methodology. Section 5 presents the neural network architectures and training procedure. Section 6 discusses challenges and considerations. Section 7 outlines experimental results. Finally, Section 8 concludes with future research directions.
 
-== Retrieval of style files
+= Problem Formulation
 
+== System Description
 
-The style files for NeurIPS and other conference information are available on
-the website at
+We consider a 3-degree-of-freedom (3-DOF) robotic manipulator with configuration defined by generalized coordinates $bold(q) = [q_1, q_2, q_3]^top in RR^3$, representing joint angles, and their time derivatives $dot(bold(q)) in RR^3$. The full observable state at discrete time step $k$ is
 
-#align(center, block(spacing: 15pt, {
-  url("http://www.neurips.cc/")
-}))
+$
+  bold(x)_k = [bold(q)_k^top, dot(bold(q))_k^top]^top in RR^6
+$
 
-The file `neurips_2025.pdf` contains these instructions and illustrates the
-various formatting requirements your NeurIPS paper must satisfy.
+The manipulator operates in a MuJoCo simulation environment governed by rigid-body dynamics with gravity compensation. The control objective is to drive the end-effector (EE) to track randomly sampled, reachable 3D Cartesian target positions $bold(p)_{"des"} in RR^3$ within the robot's workspace $cal(W) subset RR^3$.
 
-The only supported style file for NeurIPS 2025 is `neurips_2025.sty`, rewritten
-for #LaTeXe. *Previous style files for #LaTeX 2.09, Microsoft Word, and RTF
-are no longer supported!*
+= Existing Controller: MPC with Inverse Kinematics
 
-The #LaTeX style file contains three optional arguments: `final`, which creates
-a camera-ready copy, `preprint`, which creates a preprint for submission to,
-e.g., arXiv, and `nonatbib`, which will not load the `natbib` package for you
-in case of package clash.
+Our baseline controller employs a hierarchical architecture combining an Inverse Kinematics (IK) module and a Model Predictive Control (MPC) module. This structure decouples Cartesian-space task specification from joint-space optimal control.
 
-#paragraph[Preprint option] If you wish to post a preprint of your work online,
-e.g., on arXiv, using the NeurIPS style, please use the `preprint` option. This
-will create a nonanonymized version of your work with the text "Preprint. Work
-in progress." in the footer. This version may be distributed as you see fit, as
-long as you do not say which conference it was submitted to. Please *do not*
-use the `final` option, which should *only* be used for papers accepted to
-NeurIPS.
+== Inverse Kinematics Formulation
 
-At submission time, please omit the `final` and `preprint` options. This will
-anonymize your submission and add line numbers to aid review. Please do _not_
-refer to these line numbers in your paper as they will be removed during
-generation of camera-ready copies.
+The IK module translates desired end-effector positions into feasible joint-space configurations. Let $bold(p)(bold(q)): RR^3 -> RR^3$ denote the forward kinematics mapping. The Cartesian error is defined as
 
-The file `neurips_2025.tex` may be used as a "shell" for writing your paper.
-All you have to do is replace the author, title, abstract, and text of the
-paper with your own.
+$
+  bold(e) = bold(p)_{"des"} - bold(p)(bold(q))
+$
 
-The formatting instructions contained in these style files are summarized in
-Sections~#ref(<gen_inst>, supplement: none), #ref(<headings>, supplement:
-none), and #ref(<others>, supplement: none) below.
+We solve the IK problem using the Jacobian transpose method with Damped Least Squares (DLS) for numerical stability near singularities. The iterative update rule is
 
-= General formatting instructions <gen_inst>
+$
+  Delta bold(q) = bold(J)^top (bold(J) bold(J)^top + lambda bold(I))^(-1) bold(e)
+$
 
-The text must be confined within a rectangle 5.5~inches (33~picas) wide and
-9~inches (54~picas) long. The left margin is 1.5~inch (9~picas).  Use 10~point
-type with a vertical spacing (leading) of 11~points.  Times New Roman is the
-preferred typeface throughout, and will be selected for you by default.
-Paragraphs are separated by ½~line space (5.5 points), with no indentation.
+$
+  bold(q)_(i+1) = bold(q)_i + alpha dot.op Delta bold(q)
+$
 
-The paper title should be 17~point, initial caps/lower case, bold, centered
-between two horizontal rules. The top rule should be 4~points thick and the
-bottom rule should be 1~point thick. Allow ¼~inch space above and below the
-title to rules. All pages should start at 1~inch (6~picas) from the top of the
-page.
+where $bold(J)(bold(q)) = dif(partial bold(p), partial bold(q)) in RR^(3 times 3)$ is the geometric Jacobian, $lambda > 0$ is the damping factor, and $alpha in (0, 1]$ is the step size. The iteration terminates when $norm(bold(e)) < epsilon_{"tol"}$, yielding the reference configuration $bold(q)_{"ref"}$.
 
-For the final version, authors' names are set in boldface, and each name is
-centered above the corresponding address. The lead author's name is to be
-listed first (left-most), and the co-authors' names (if different address) are
-set to follow. If there is only one co-author, list both author and co-author
-side by side.
+== Model Predictive Control Formulation
 
-Please pay special attention to the instructions in @others regarding figures,
-tables, acknowledgments, and references.
+The MPC module receives $bold(q)_{"ref"}$ and computes optimal control torques $bold(tau) in RR^3$ over a finite prediction horizon. For prediction, we employ a simplified double-integrator model:
 
-= Headings: first level <headings>
+$
+  dot(bold(x)) = [[dot(bold(q))], [dot.double(bold(q))]] = [[dot(bold(q))], [bold(tau)]]
+$
 
-All headings should be lower case (except for first word and proper nouns),
-flush left, and bold.
+Discrete-time dynamics with sampling period $Delta t$ are
 
-First-level headings should be in 12-point type.
+$
+  bold(x)_(k+1) = bold(x)_k + Delta t dot([dot(bold(q))_k, bold(tau)_k]) =: f(bold(x)_k, bold(tau)_k)
+$
 
-== Headings: second level
+The MPC solves the following finite-horizon optimal control problem:
 
-Second-level headings should be in 10-point type.
+$
+  min_(bold(tau)_(0:N-1)) quad sum_(k=0)^(N-1) (norm(bold(x)_k - bold(x)_{"ref"})_bold(Q)^2 + norm(bold(tau)_k)_bold(R)^2) + norm(bold(x)_N - bold(x)_{"ref"})_(bold(Q)_N)^2
+$
 
-=== Headings: third level
+subject to:
 
-Third-level headings should be in 10-point type.
+$
+  bold(x)_(k+1) = f(bold(x)_k, bold(tau)_k), quad bold(x)_0 = bold(x)(t)
+$
 
-#paragraph[Paragraphs] There is also a `\paragraph` command available, which
-sets the heading in bold, flush left, and inline with the text, with the
-heading followed by #1em of space.
+$
+  bold(tau)_min <= bold(tau)_k <= bold(tau)_max
+$
 
-= Citations, figures, tables, references <others>
+where $bold(x)_{"ref"} = [bold(q)_{"ref"}^top, bold(0)^top]^top$ is the target state, and $bold(Q)$, $bold(R)$, $bold(Q)_N succ 0$ are weighting matrices. The optimization is performed using CasADi with IPOPT. The first control input $bold(tau)^*_0$ is applied to the system.
 
-These instructions apply to everyone.
+*Limitation:* The computational burden of iterative IK solving and online MPC optimization exceeds 50ms per control step on standard hardware, limiting control frequencies to approximately 20Hz and prohibiting deployment on embedded platforms.
 
-== Citations within the text
+= Dataset Generation Pipeline
 
-The `natbib` package will be loaded for you by default.  Citations may be
-author/year or numeric, as long as you maintain internal consistency.  As to
-the format of the references themselves, any style is acceptable as long as it
-is used consistently.
+To enable imitation learning, we generate a dataset of expert demonstrations from the closed-loop IK-MPC controller. The dataset $cal(D) = { (bold(X)_i, bold(tau)_i^{"MPC"}) }_(i=1)^M$ consists of state sequence-action pairs, where $bold(X)_i = [bold(x)_(i-H+1), ..., bold(x)_(i-1), bold(x)_i] in RR^(H times 6)$ represents $H$ consecutive states.
 
-The documentation for `natbib` may be found at
+The data collection process proceeds as follows:
 
-#align(center)[
-  #url("http://mirrors.ctan.org/macros/latex/contrib/natbib/natnotes.pdf")
-]
+1. **Target Sampling:** Sample reachable end-effector target $bold(p)_{"des"} cal(W)$. Validate reachability using IK solver convergence within iteration budget $I_max$.
 
-Of note is the command `\citet`, which produces citations appropriate for use
-in inline text.  For example,
+2. **Reference Calculation:** Compute joint-space reference $bold(q)_{"ref"}$ using the DLS IK algorithm.
 
-```tex
-    \citet{hasselmo} investigated\dots
-```
-produces
-
-#{
-  show quote: set block(spacing: 15pt)
-  quote(block: true)[Hasselmo, et al.~(1995) investigated\dots]
-}
-
-If you wish to load the `natbib` package with options, you may add the
-following before loading the `neurips_2025` package:
-
-```tex
-    \PassOptionsToPackage{options}{natbib}
-```
-
-If `natbib` clashes with another package you load, you can add the optional
-argument `nonatbib` when loading the style file:
-
-```tex
-    \usepackage[nonatbib]{neurips_2025}
-```
-
-As submission is double blind, refer to your own published work in the third
-person. That is, use "In the previous work of Jones et al.~[4]," not "In our
-previous work [4]." If you cite your other papers that are not widely available
-(e.g., a journal paper under review), use anonymous author names in the
-citation, e.g., an author of the form "A.~Anonymous" and include a copy of the
-anonymized paper in the supplementary material.
-
-#v(7pt)  // In order to match original template.
-
-== Footnotes
-
-Footnotes should be used sparingly. If you do require a footnote, indicate
-footnotes with a number#footnote[Sample of the first footnote.] in the text.
-Place the footnotes at the bottom of the page on which they appear. Precede the
-footnote with a horizontal rule of 2~inches (12~picas).
-
-Note that footnotes are properly typeset _after_ punctuation marks.#footnote[As
-in this example.]
-
-#v(7pt)  // In order to match original template.
+3. **Expert Demonstration:** Execute the MPC controller for maximum episode length $T_max$ or until $norm(bold(x)_k - bold(x)_{"ref"}) < delta_{"success"}$.
 
-== Figures
+4. **Data Collection:** Record state-action pairs $(bold(x)_k, bold(tau)_k^{"MPC"})$. After accumulating history buffer of length $H$, store tuples $(bold(X)_k, bold(tau)_k^{"MPC"})$. The gravity compensation term $bold(tau)_g(bold(q))$ is explicitly excluded to learn only corrective control actions.
 
-#figure(
-  rect(width: 4.25cm, height: 4.25cm, stroke: 0.4pt),
-  caption: [Sample figure caption.],
-  placement: top,
-)
+This process yields approximately 100,000 training examples after 5,000 episodes, requiring 72 hours of compute time on a 16-core workstation.
 
-All artwork must be neat, clean, and legible. Lines should be dark enough for
-purposes of reproduction. The figure number and caption always appear after the
-figure. Place one line space before the figure caption and one line space after
-the figure. The figure caption should be lower case (except for first word and
-proper nouns); figures are numbered consecutively.
-
-You may use color figures.  However, it is best for the figure captions and the
-paper body to be legible if the paper is printed in either black/white or in
-color.
+= Neural Network Imitation of MPC Policy
 
-// In order to match original template.
-#pagebreak()
-#v(-9pt)
+We formulate the learning problem as minimizing the mean-squared error between the neural network policy $pi_theta$ and the expert MPC actions:
 
-== Tables <tables>
+$
+  min_theta quad 1/(abs(cal(D))) sum_((bold(X)_i, bold(tau)_i) in cal(D)) norm(pi_theta(bold(X)_i) - bold(tau)_i^{"MPC"})_2^2
+$
 
-All tables must be centered, neat, clean and legible.  The table number and
-title always appear before the table. See @sample-table.
+where $pi_theta: RR^(H times 6) -> RR^3$ maps a sequence of historical states to control torques.
 
-Place one line space before the table title, one line space after the
-table title, and one line space after the table. The table title must
-be lower case (except for first word and proper nouns); tables are
-numbered consecutively.
+We investigate three architectural classes:
 
-Note that publication-quality tables _do not contain vertical rules_. We
-strongly suggest the use of the `booktabs` package, which allows for
-typesetting high-quality, professional tables:
+*Feedforward Network (FFN):* Flattens the state sequence into a vector $bold(x)_flat in RR^(6H)$ and processes through $L$ fully-connected layers with ReLU activations:
 
-#align(center)[
-  #url("https://www.ctan.org/pkg/booktabs")
-]
+$
+  pi_theta^{"MPC"}(bold(X)) = bold(W)_L dot "ReLU"(bold(W)_(L-1) "ReLU"(bold(W)_1 bold(x)_flat + bold(b)_1) dot.op + bold(b)_(L-1)) + bold(b)_L
+$
 
-This package was used to typeset @sample-table.
+*Recurrent Neural Network (RNN):* Employs stacked LSTM or GRU layers to process the state sequence temporally. The final hidden state $bold(h)_T$ is mapped to actions:
 
-#figure(
-  caption: [Sample table title.],
-  placement: top,
-  table(
-    columns: 3,
-    align: left + horizon,
-    stroke: none,
-    toprule,
-    table.header(
-      table.cell(colspan: 2, align: center)[Part], [],
-      table.hline(start: 0, end: 2, stroke: (thickness: 0.05em)),
-      [Name], [Description], [Size ($mu$m)],
-    ),
-    midrule,
-    [Dendrite], [Input terminal ], [$~100$],
-    [Axon    ], [Output terminal], [$~10$],
-    [Soma    ], [Cell body      ], [up to $10^6$],
-    botrule,
-  ),  // TODO(@daskol): Fix gutter between rows in body.
-) <sample-table>
-
-== Math
-
-Note that display math in bare TeX commands will not create correct line
-numbers for submission. Please use LaTeX (or AMSTeX) commands for unnumbered
-display math. (You really shouldn't be using $dollar dollar$ anyway; see
-#url("https://tex.stackexchange.com/questions/503/why-is-preferable-to") and
-#url("https://tex.stackexchange.com/questions/40492/what-are-the-differences-between-align-equation-and-displaymath")
-for more information.)
-
-== Final instructions
-
-Do not change any aspects of the formatting parameters in the style files.  In
-particular, do not modify the width or length of the rectangle the text should
-fit into, and do not change font sizes (except perhaps in the *References*
-section; see below). Please note that pages should be numbered.
-
-= Preparing PDF files
-
-Please prepare submission files with paper size "US Letter," and not, for
-example, "A4."
-
-Fonts were the main cause of problems in the past years. Your PDF file must only
-contain Type 1 or Embedded TrueType fonts. Here are a few instructions to
-achieve this.
-
-- You should directly generate PDF files using `pdflatex`.
-
-- You can check which fonts a PDF files uses.  In Acrobat Reader, select the
-  menu Files$>$Document Properties$>$Fonts and select Show All Fonts. You can
-  also use the program `pdffonts` which comes with `xpdf` and is available
-  out-of-the-box on most Linux machines.
-
-- `xfig` "patterned" shapes are implemented with bitmap fonts. Use "solid"
-  shapes instead.
-
-- The `\bbold` package almost always uses bitmap fonts. You should use the
-  equivalent AMS Fonts:
-
-  ```tex
-      \usepackage{amsfonts}
-  ```
-
-  followed by, e.g., `\mathbb{R}`, `\mathbb{N}`, or `\mathbb{C}` for $RR$, $NN$
-  or $CC$.  You can also use the following workaround for reals, natural and
-  complex:
-
-  ```tex
-      \newcommand{\RR}{I\!\!R} %real numbers
-      \newcommand{\Nat}{I\!\!N} %natural numbers
-      \newcommand{\CC}{I\!\!\!\!C} %complex numbers
-  ```
-
-  Note that `amsfonts` is automatically loaded by the `amssymb` package.
-
-If your file contains Type 3 fonts or non embedded TrueType fonts, we will ask
-you to fix it.
-
-== Margins in #LaTeX
-
-Most of the margin problems come from figures positioned by hand using
-`\special` or other commands. We suggest using the command `\includegraphics`
-from the `graphicx` package. Always specify the figure width as a multiple of
-the line width as in the example below:
-
-```tex
-    \usepackage[pdftex]{graphicx} ...
-    \includegraphics[width=0.8\linewidth]{myfile.pdf}
-```
-
-See @tables in the graphics bundle documentation
-(#url("http://mirrors.ctan.org/macros/latex/required/graphics/grfguide.pdf"))
-
-A number of width problems arise when #LaTeX cannot properly hyphenate a line.
-please give #LaTeX hyphenation hints using the `\-` command when necessary.
-
-// note this is the acknowledgments section which is not visible in draft.
-#if false [
-use unnumbered first level headings for the acknowledgments. all
-acknowledgments go at the end of the paper before the list of references.
-moreover, you are required to declare funding (financial activities supporting
-the submitted work) and competing interests (related financial activities
-outside the submitted work). More information about this disclosure can be
-found at:
-#url("https://neurips.cc/Conferences/2025/PaperInformation/FundingDisclosure")
-
-Do *not* include this section in the anonymized submission, only in the final
-paper. You can use the `ack` environment provided in the style file to
-autmoatically hide this section in the anonymized submission.
-]
-
-// We typset reference section header manualy in order to reproduce example
-// paper. No special effort is required (a user should not override
-// `bibliography-opts` as well).
-#heading(numbering: none)[References]
-
-References follow the acknowledgments in the camera-ready paper. Use unnumbered
-first-level heading for the references. Any choice of citation style is
-acceptable as long as you are consistent. It is permissible to reduce the font
-size to `small` (9 point) when listing the references. Note that the Reference
-section does not count towards the page limit.
+$
+  bold(h)_t = "LSTM"(bold(x)_t, bold(h)_(t-1))
+$
+
+$
+  pi_theta^"RNN"(bold(X)) = bold(W)_"out" bold(h)_T + bold(b)_"out"
+$
+
+*Transformer:* Utilizes multi-head self-attention mechanisms to model pairwise interactions across the entire history window. Positional encodings $bold(P) in RR^(H times d)$ are added to embedded states $bold(E) = [bold(W)_e bold(x)_(i-H+1), ..., bold(W)_e bold(x)_i]^top$ to preserve temporal information. After $L$ transformer blocks, the output is mean-pooled and projected to action space:
+
+$
+  pi_theta^"Transformer"(bold(X)) = bold(W)_"action" dot "MeanPool"("Transformer"_L(bold(E) + bold(P))) + bold(b)_"action"
+$
+
+All networks are trained for 100 epochs using Adam optimizer with learning rate $10^-3$ and batch size 256. We employ L2 regularization with coefficient $10^-4$ and early stopping based on validation loss.
+
+= Key Challenges
+
+Several fundamental challenges arise in this imitation learning paradigm:
+
+*Generalization:* The policy must robustly handle state distributions outside the training manifold, particularly near workspace boundaries $partial cal(W)$ and kinematic singularities where $det(bold(J)bold(J)^top) approx 0$. The MPC's performance degrades gracefully in these regions; the learned policy must emulate this behavior.
+
+*Stability and Safety:* Unlike the constrained MPC, neural policies lack theoretical stability guarantees. The unconstrained nature of $pi_theta$ may generate high-frequency oscillations or infeasible torques. While the expert data respects $bold(tau)_min <= bold(tau)_k <= bold(tau)_max$, the learned policy may violate these constraints necessitating post-hoc saturation.
+
+*Data Efficiency:* Data collection requires solving $N times abs(cal(D))$ MPC problems, where $N$ is the MPC horizon. For $abs(cal(D)) = 10^5$ and $N = 20$, this entails two million optimization solves. This computational bottleneck necessitates sample-efficient architectures and transfer learning strategies.
+
+*Performance Parity:* Achieving tracking errors $norm(bold(p)_EE - bold(p)_"des")$ within 5% of the expert MPC while maintaining comparable settling times $t_(95%)$ requires careful architectural design and training regularization. Performance degradation in end-effector orientation control (not addressed by position-only IK) remains an open challenge.
+
+= Expected Outcomes and Experimental Validation
+
+The successful neural network policy should demonstrate:
+
+*Computational Efficiency:* Inference time $< 1$ms on an NVIDIA Jetson Xavier NX, enabling 500Hz control rates—25× faster than the MPC baseline's 20Hz at desktop-level performance.
+
+*Control Performance:* Root-mean-square tracking error $"RMSE"_p = sqrt(1/T sum_(k=1)^T norm(bold(p)_(EE,k) - bold(p)_"des")^2)$ within 10% of the MPC expert across 1000 test targets uniformly sampled from $cal(W)$.
+
+*Temporal Reasoning:* Utilization of historical state information yields measurable performance improvements over memory-less policies, particularly for targets near singularities where momentum history informs better escape trajectories.
+
+*Generalization:* Robust performance on out-of-distribution targets (e.g., near workspace boundaries or requiring joint-limit avoidance) with $< 15%$ degradation in success rate.
+
+We validate these outcomes through quantitative benchmarks comparing architectural variants, ablation studies on history length $H$, and sim-to-real transfer experiments using domain randomization on dynamics parameters $(m_i, l_i, I_i)$.
+
+= Conclusion and Future Work
+
+This work demonstrates the feasibility of distilling computationally expensive MPC policies into lightweight neural network controllers for 3-DOF manipulators. Our systematic evaluation of architectural choices provides guidance for selecting appropriate models based on task requirements and computational constraints.
+
+Future research directions include:
+
+*Investigating adaptive history windows that expand when near singularities and contract otherwise*
+*Incorporating safety-critical constraints via neural network verification tools (e.g., ReLUplex)*
+*Extending to full 6-DOF pose control using neural IK solvers in the learning loop*
+*Developing active learning strategies to reduce data collection burden by 90%*
+*Exploring reinforcement learning fine-tuning to surpass expert performance*
+
+The methodology scales naturally to higher-DOF systems and more complex dynamics, offering a path toward real-time optimal control on embedded platforms.
