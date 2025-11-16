@@ -1,5 +1,4 @@
 #import "@preview/bloated-neurips:0.7.0": botrule, midrule, neurips2025, paragraph, toprule, url
-#import "/logo.typ": LaTeX, LaTeXe, TeX
 
 #let affls = (
   waterloo-theo: (
@@ -210,9 +209,9 @@ $
 
 = Results
 
-== Presentation of our metrics
+== Offline evaluation
 
-== Closed loop control with NN inside MuJoCo
+== Online evaluation (MuJoCo)
 
 = Future Work
 
