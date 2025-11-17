@@ -3,25 +3,25 @@
 The goal is to set up the complete training and evaluation pipeline in a Google Colab notebook.
 
 * **Data Preparation**
-    * [ ] Import libraries and create a **dataloader**.
+    * [ ] Import libraries and create **dataloader**
     * [ ] Implement **simple data augmentation**.
+    * [ ] Visualization of a random episode
 * **Model & Training Setup**
     * [ ] Write the code for the **3 different models**.
     * [ ] Implement the **training loop**.
     * [ ] Implement the **testing loop**.
 * **Loss & Optimization**
-    * [ ] Define the **2 loss functions**:
+    * [ ] Implement the **2 loss functions**:
         * [ ] **Mean Squared Error (MSE)**
         * [ ] **Mean Absolute Error (MAE)**
-    * [ ] Define the **1 optimizer**:
+    * [ ] Implement the **optimizer**:
         * [ ] **AdamW**
-    * [ ] Define the **2 schedulers**:
+    * [ ] Implement the **scheduler**:
         * [ ] **ReduceLROnPlateau**
 * **Exporting Results**
     * [ ] **Export all results** in a good text file format:
         * [ ] `model_type`, `hyperparameters`
-        * [ ] `training loss`, `testing loss`, `type of loss`, `epoch`
-        * [ ] **Add other metrics** specified in our paper.
+        * [ ] `training loss`, `testing loss`, `type of loss`, `epoch`, `gradient norm`
     * [ ] **Export the model weights** as a `.pth` file.
 
 ---
