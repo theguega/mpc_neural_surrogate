@@ -23,7 +23,7 @@
     <light directional="true" diffuse="0.4 0.4 0.4" specular="0.2 0.2 0.2" pos="1 1 4" dir="0 0 -1"/>
 
     <!-- Target position marker (mocap body) -->
-    <body name="target" mocap="true" pos="0 0 0.5">
+    <body name="target" mocap="true" pos="1 1 2">
       <geom name="target_geom" type="sphere" size="0.05" rgba="1 0 0 0.5" contype="0" conaffinity="0"/>
     </body>
 

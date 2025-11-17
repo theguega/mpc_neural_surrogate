@@ -7,21 +7,20 @@ from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
 
+TOL = 0.02  # 2cm tolerance
+
 
 def run_visual_test_three_targets():
-    # --- Init environment and controller ---
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
     controller = MPCController(dt=0.05, prediction_horizon=20)
     n_joints = 3
     n_sim_steps_per_mpc_step = int(controller.dt / env.model.opt.timestep)
 
-    # --- Reset robot ---
     obs = env.reset()
     env.data.qpos[:3] = np.zeros(3)
     env.data.qvel[:3] = np.zeros(3)
     mujoco.mj_forward(env.model, env.data)
 
-    # --- Hardcoded targets (in world coordinates) ---
     targets = [
         np.array([-0.5, 0.2, 0.5]),
         np.array([-0.4, 0.1, 0.40]),
@@ -29,15 +28,13 @@ def run_visual_test_three_targets():
         np.array([-0.5, 0.0, 0.55]),
     ]
 
-    # --- Set up visible mocap target ---
     target_body_id = env.model.body("target").id
-    env.model.body_mocapid[target_body_id] = 0  # enable mocap binding
+    env.model.body_mocapid[target_body_id] = 0
 
-    # --- Start simulation ---
     current_target_idx = 0
     target_pos = targets[current_target_idx]
-    joint_target = solve_inverse_kinematics(env, target_pos)
-    env.data.mocap_pos[0] = target_pos  # show first target
+    _, joint_target = solve_inverse_kinematics(env, target_pos)
+    env.data.mocap_pos[0] = target_pos
     mujoco.mj_forward(env.model, env.data)
 
     print(f"Starting simulation with {len(targets)} targets.")
@@ -48,34 +45,25 @@ def run_visual_test_three_targets():
             current_ee_pos = env.get_ee_position()
             ee_error = np.linalg.norm(current_ee_pos - target_pos)
 
-            # --- Switch to next target when close enough ---
-            if ee_error < 0.03:
+            if ee_error < TOL:
                 current_target_idx += 1
                 if current_target_idx >= len(targets):
-                    print("✅ All targets reached. Ending simulation.")
+                    print("All targets reached. Ending simulation.")
                     break
 
                 target_pos = targets[current_target_idx]
-                joint_target = solve_inverse_kinematics(env, target_pos)
+                _, joint_target = solve_inverse_kinematics(env, target_pos)
                 env.data.mocap_pos[0] = target_pos
                 mujoco.mj_forward(env.model, env.data)
-                print(f"\n➡️  New target {current_target_idx + 1}: {target_pos}")
+                print(f"\nNew target {current_target_idx + 1}: {target_pos}")
 
-            # --- MPC Control ---
             current_state = obs[:6]
             tau_mpc, solved = controller.solve(current_state, joint_target)
             if not solved:
                 tau_mpc = np.zeros(n_joints)
 
-            # Add gravity compensation (MPC uses simplified dynamics without gravity)
             total_tau = tau_mpc + env.data.qfrc_bias
-            
-            # Debug: print joint error occasionally
-            if step % 100 == 0 and ee_error > 0.03:
-                joint_error = np.linalg.norm(current_state[:3] - joint_target)
-                print(f"  Joint target: {joint_target}, Current: {current_state[:3]}, Joint error: {joint_error:.3f}")
 
-            # Step simulation
             for _ in range(n_sim_steps_per_mpc_step):
                 obs, _, _, _ = env.step(total_tau)
 

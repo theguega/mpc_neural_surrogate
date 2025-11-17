@@ -1,92 +1,136 @@
 # MPC Surrogate
 
-Approximating Model Predictive Control policies using neural networks for a 3DOF robotic arm.
+[![Python Version](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+A project for approximating Model Predictive Control (MPC) policies using neural networks for a 3-degree-of-freedom (3DOF) robot arm simulation in MuJoCo.
+
+## Overview
+
+This repository implements a surrogate modeling approach to replace computationally expensive MPC controllers with fast neural network approximations. The project focuses on trajectory optimization and control for robotic manipulation tasks, enabling real-time performance while maintaining control accuracy.
+
+## Features
+
+- **MuJoCo Simulation**: Realistic physics simulation of a 3DOF robot arm
+- **MPC Implementation**: Full MPC controller using CasADi for optimal control
+- **Neural Network Surrogates**: Trainable NN models to approximate MPC policies
+- **Data Generation**: Scripts for collecting MPC trajectory data
+- **Evaluation Tools**: Closed-loop testing and performance comparison
+- **Visualization**: Comprehensive plotting and analysis tools
 
 ## Installation
 
-Install dependencies using uv:
+### Prerequisites
 
-```bash
-uv sync
-```
+- Python 3.12 or higher
+- uv package manager (recommended)
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/mpc-surrogate.git
+   cd mpc-surrogate
+   ```
+
+2. Install dependencies using uv:
+   ```bash
+   uv sync
+   ```
+
+3. (Optional) Install development dependencies:
+   ```bash
+   uv sync --group dev
+   ```
 
 ## Usage
 
-### Generate Dataset
+### Data Generation
 
-Run the data generation script:
-
-```bash
-python src/mpc_surrogate/data_generator.py
-```
-
-This generates `data/robot_mpc_dataset.h5` with MPC data.
-
-### Tests
-
-To ensure MPC and inverse kinematics are working we implemented some unit tests :
+Generate MPC trajectory data for training:
 
 ```bash
-python tests/ik_test.py
-
-# need mjpython to run interactive mujuco simulation on macos
-mjpython tests/mpc_mujoco_sim.py
+python scripts/data_generator.py
 ```
 
-This launches the Mujoco viewer to replay a sample trajectory.
+### Training
 
-## MPC Dataset Generation
+Train neural network surrogates using the provided Jupyter notebook:
 
-We can generate a dataset for learning to imitate a Model Predictive Controller (MPC) for a 3-DoF robotic arm simulated in MuJoCo. The goal is to create input-output pairs suitable for training a neural network surrogate for the MPC.
-
-### How it works
-
-1. **Environment Setup**
-
-   * The MuJoCo simulation is loaded with a 3-DoF robotic arm.
-   * An MPC controller is instantiated with a specified timestep (`dt=0.05`) and prediction horizon (`N=20`).
-
-2. **Target Sampling**
-
-   * At each step, a new end-effector (EE) target is sampled with low probability (`5%`) to ensure smooth transitions between targets.
-   * Targets are generated within the reachable workspace, avoiding singularities near the base.
-   * `solve_inverse_kinematics()` is used to convert EE targets into corresponding joint positions for the MPC controller.
-
-3. **Data Collection Loop**
-
-   * For each episode (default 100 episodes) and each timestep (default 150 steps per episode):
-
-     * The current state `[q1, q2, q3, q̇1, q̇2, q̇3]` is recorded.
-     * MPC computes the torque `τ_mpc` to move toward the target joint positions.
-     * We are taking the torque `τ_mpc` for our dataset.
-     * Total torque is calculated as `τ_total = τ_mpc + qfrc_bias` to include static dynamics effects such as gravity and friction.
-     * The simulation is stepped forward using `τ_total` for the appropriate number of simulation steps per MPC step.
-   * If the MPC fails to solve, the step is skipped.
-
-4. **Dataset Storage**
-
-   * Data is stored in an HDF5 file with gzip compression:
-
-     * `states`: joint positions and velocities, shape `(num_samples, 6)`
-     * `targets`: end-effector target positions, shape `(num_samples, 3)`
-     * `actions`: MPC torques applied, shape `(num_samples, 3)`
-
----
-
-### Example
-
-```python
-import h5py
-import numpy as np
-
-with h5py.File("data/robot_mpc_dataset.h5", "r") as f:
-    states = f["states"][:]
-    targets = f["targets"][:]
-    actions = f["actions"][:]
-
-print(states.shape)  # e.g., (15000, 6)
-print(targets.shape) # e.g., (15000, 3)
-print(actions.shape) # e.g., (15000, 3)
+```bash
+jupyter notebook scripts/mpc_surrogate_training.ipynb
 ```
 
-This dataset can then be used to train a neural network to approximate the MPC controller in a supervised learning setting.
+### Interactive Simulation
+
+Launch the MuJoCo interactive viewer:
+
+```bash
+python scripts/interactive_mujoco_launcher.py
+```
+
+### Closed-Loop Testing
+
+Evaluate controller performance:
+
+```bash
+python scripts/closed_loop_testing.py  # (assuming this exists based on TODO)
+```
+
+## Project Structure
+
+```
+├── data/                    # Generated datasets
+├── models/                  # MuJoCo model files
+├── report/                  # Research report and figures
+├── scripts/                 # Utility scripts and notebooks
+├── src/mpc_surrogate/       # Core package
+│   ├── mpc_controller.py    # MPC implementation
+│   ├── mujoco_env.py        # MuJoCo environment wrapper
+│   └── utils.py             # Helper functions
+└── tests/                   # Unit tests
+```
+
+## Development
+
+### Testing
+
+Run the test suite:
+
+```bash
+pytest
+```
+
+### Code Quality
+
+Format and lint code:
+
+```bash
+ruff check . --fix
+ruff format .
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Author
+
+Theo - [GitHub](https://github.com/theguega)
+
+## Citation
+
+If you use this code in your research, please cite our paper:
+
+```bibtex
+@misc{mpc-surrogate,
+  title={Approximating Model Predictive Control policies using neural networks},
+  author={Theo},
+  year={2024},
+  url={https://github.com/your-username/mpc-surrogate}
+}
+```

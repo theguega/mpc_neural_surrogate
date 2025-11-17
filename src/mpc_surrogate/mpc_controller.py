@@ -7,13 +7,11 @@ class MPCController:
         self.dt = dt
         self.N = prediction_horizon
 
-        # define symbolic variables
         self.q = ca.SX.sym("q", 3)  # joint positions
         self.q_dot = ca.SX.sym("q_dot", 3)  # joint velocities
         self.tau = ca.SX.sym("tau", 3)  # control inputs (torques)
 
-        # Simplified dynamics model: assumes unit mass and no gravity
-        # Gravity compensation should be added externally when applying torques
+        # simplified dynamics model, gravity and friction handled externally by MuJoCo
         q_ddot = self.tau
 
         # state and input vectors
@@ -22,7 +20,7 @@ class MPCController:
 
         # discrete dynamics: x_next = x + dt * f(x,u)
         x_next = x + self.dt * ca.vertcat(self.q_dot, q_ddot)
-        self.f = ca.Function("f", [x, u], [x_next])  # discrete dynamics function
+        self.f = ca.Function("f", [x, u], [x_next])
 
         # optimization problem
         self.opti = ca.Opti()
@@ -33,7 +31,7 @@ class MPCController:
 
         cost = 0
 
-        # cost matrices - increased position weights to prioritize reaching target
+        # cost matrices
         Q = np.diag([200, 200, 200, 5, 5, 5])  # state error weight (position >> velocity)
         R = np.diag([0.1, 0.1, 0.1])  # input weight (lower to allow larger torques)
         Q_N = np.diag([1000, 1000, 1000, 50, 50, 50])  # terminal cost (high position penalty)
@@ -54,33 +52,33 @@ class MPCController:
             ]
         )
 
-        self.opti.minimize(cost)  # set cost function
+        self.opti.minimize(cost)
 
         # dynamics constraints
         for k in range(self.N):
             self.opti.subject_to(self.x[:, k + 1] == self.f(self.x[:, k], self.u[:, k]))
-        self.opti.subject_to(self.x[:, 0] == self.p)  # initial state constraint
+        self.opti.subject_to(self.x[:, 0] == self.p)
 
-        # Add torque limits to prevent unrealistic commands
-        tau_max = 50.0  # Maximum torque per joint
+        # torque limits to prevent unrealistic commands
+        tau_max = 50.0
         for k in range(self.N):
             self.opti.subject_to(self.u[:, k] <= tau_max)
             self.opti.subject_to(self.u[:, k] >= -tau_max)
 
         # solver options
         solver_opts = {
-            "ipopt.print_level": 0,  # suppress ipopt output
+            "ipopt.print_level": 0,
             "print_time": 0,
             "ipopt.max_iter": 100,
         }
-        self.opti.solver("ipopt", solver_opts)  # choose solver
+        self.opti.solver("ipopt", solver_opts)
 
     def solve(self, x0, x_ref_val):
         self.opti.set_value(self.p, x0)  # set current state
         self.opti.set_value(self.x_ref, x_ref_val)  # set target
 
         try:
-            sol = self.opti.solve()  # solve MPC
+            sol = self.opti.solve()
             return sol.value(self.u[:, 0]), True  # return first control
         except RuntimeError as e:
             print(f"MPC solver failed: {e}")
