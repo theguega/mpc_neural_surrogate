@@ -7,7 +7,7 @@
     country: "Canada"),
   waterloo-dexter: (
     institution: "University of Waterloo",
-    department: "",
+    department: "21230211",
     country: "Canada"),
 )
 
@@ -16,9 +16,9 @@
    affl: "waterloo-theo",
    email: "tguegan@uwaterloo.ca",
    equal: true),
-  (name: "Dexter Teo",
+  (name: "Wen Jie Dexter Teo",
    affl: "waterloo-dexter",
-   email: "@uwaterloo.ca",
+   email: "d2teo@uwaterloo.ca",
    equal: false),
 )
 
@@ -27,7 +27,7 @@
   authors: (authors, affls),
   keywords: ("Behavior Cloning", "MPC", "Robotics", "Deep Learning"),
   abstract: [
-    This paper investigates the application of behavior cloning to approximate Model Predictive Control (MPC) policies for real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining inverse kinematics (IK) with MPC, and evaluate multiple neural network architectures—including feedforward networks, and recurrent neural networks (RNNs) to learn a surrogate policy. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. The proposed methodology provides a path toward deploying complex optimal control strategies on computationally constrained platforms.
+    This paper investigates the application of behavior cloning to approximate Model Predictive Control (MPC) policies for real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining inverse kinematics (IK) with MPC, systematically evaluate multiple neural network architectures—including feedforward networks and recurrent neural networks (RNNs)—to learn computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. The proposed methodology demonstrates that neural network policies can achieve real-time performance while maintaining control accuracy, providing a viable path toward deploying complex optimal control strategies on computationally constrained platforms.
   ],
   bibliography: bibliography("main.bib"),
   accepted: true,
@@ -35,7 +35,7 @@
 
 = Introduction
 
-Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks on the other hand can offer a computationally efficient alternative for approximating MPC policies with different architectures @gonzalez2024neuralnetworksfastoptimisation.
+Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks may offer a promising and computationally efficient alternative for approximating MPC policies with different architectures @gonzalez2024neuralnetworksfastoptimisation.
 
 We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector (EE) to reach a 3D cartesian target position within the robot's reachable workspace.
 
