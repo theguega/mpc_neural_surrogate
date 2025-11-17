@@ -5,7 +5,7 @@
 #show: ieee.with(
   title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators],
   abstract: [
-    This paper investigates the application of behavior cloning to approximate Model Predictive Control (MPC) policies for real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining inverse kinematics (IK) with MPC, systematically evaluate multiple neural network architectures—including feedforward networks and recurrent neural networks (RNNs)—to learn computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. The proposed methodology demonstrates that neural network policies can achieve real-time performance while maintaining control accuracy, providing a viable path toward deploying complex optimal control strategies on computationally constrained platforms.
+    While MPC controllers offer strong stability and robustness, they can be computationally expensive for real-time systems and resource-constrained devices. This paper investigates the application of behavior cloning to approximate Model Predictive Control (MPC) policies for real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining inverse kinematics (IK) with MPC and evaluate multiple neural network architectures such as feedforward networks and recurrent neural networks (RNNs) to learn computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. Our empirical study relies on both online and offline evaluation to measure the performance in terms of accuracy, computational efficiency, and ability to reproduce the original MPC policy.
   ],
   authors: (
     (
@@ -132,11 +132,40 @@ Where $x_"ref" = [q_"des", 0^T]^T$ is the target state, and $bold(Q), bold(R), b
 
 To enable behavior-cloning from the expert IK-MPC controller, we generate a dataset of joint angles, joint velocities, target, and predicted torques from the closed-loop MuJoCo simulation. The process for each episode is as follows:
 
-1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ is sampled within the workspace $cal(W)$.
+== Collection process
+
+1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ is sampled within the workspace $cal(W)$, for this purpose we use cylindrical coordinates to sample a radius $r$ and height $z$ uniformly within the maximum workspace dimensions.
 2. The IK solver computes the corresponding joint-space reference $q_"des"$.
 3. The MPC controller generates torque commands $tau_"MPC"$ to achieve the desired joint angles and velocities, given the current state $x_k$ and a specified prediction horizon $N$.
 4. For each time step $k$, we record the current state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$, the target $p_"des"$, and the predicted torque $tau_"MPC"$.
 5. We step the simulation until the end of the episode or until the target is reached using $tau = tau_"MPC" + tau_"env"$ (with $tau_"env"$ from MuJoCo bias force : `mjData.qfrc_bias`).
+
+During this process, if either the MPC controller or the IK solver fails to converge, we discard the data for that time step to keep only high-quality data.
+
+
+== Dataset Structure
+
+After generation, the dataset is stored in an episode-based format within a HDF5 file.
+
+```
+episodes/
+├── ep_0000/
+│   ├── states : (T₀ × 6)
+│   ├── targets : (T₀ × 3)
+│   └── actions : (T₀ × 3)
+└── ep_0001/
+    ├── states : (T₁ × 6)
+    ├── targets : (T₁ × 3)
+    └── actions : (T₁ × 3)
+```
+
+This format allows us to easily process an episode at a time (fittable for both MLP of RNN achitecture), and to split the dataset into training and validation sets regardless of the episode length.
+
+== Data Preprocessing
+
+Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $["q1", "q2", "q3", "q̇1", "q̇2", "q̇3"]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances.
+
+Because our data generation pipeline allows us to generate as many samples as needed, we can easily collect a large dataset for training our neural network. Therefore, for the training process we can increase the number of samples until we reach a plateau in the validation loss or a computational limit. For the splitting of the dataset, we use a 90/10 split, where 90% of the data is used for training and 10% for the validation as done in this paper @deAPorto2025.
 
 = Neural Network Architecture
 
@@ -171,21 +200,6 @@ include graph here
 
 
 = Evaluation Methodology
-
-== Data augmentation
-
-For each batch, randomly perturb the states and/or actions with Gaussian noise.
-
-Add noise to the input state [q1, q2, q3, q̇1, q̇2, q̇3] before feeding it to your neural network.
-
-1. Simulates sensor noise or slight inaccuracies in state observation.
-2. Helps the network generalize to real-world scenarios where states are never perfectly measured.
-
-Add Gaussian noise (e.g., N(0, 0.1)) to the output action (torque) τ_mpc before using it as the target for your network.
-
-1. Simulates actuator noise or imperfections in the control signal.
-2. Encourages the network to learn a smoother, more robust policy.
-
 
 == Metrics
 

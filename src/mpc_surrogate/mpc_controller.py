@@ -67,9 +67,11 @@ class MPCController:
 
         # solver options
         solver_opts = {
-            "printLevel": "none",
+            "ipopt.print_level": 0,
+            "print_time": 0,
+            "ipopt.max_iter": 100,
         }
-        self.opti.solver("qpoases", solver_opts)
+        self.opti.solver("ipopt", solver_opts)
 
     def solve(self, x0, x_ref_val):
         self.opti.set_value(self.p, x0)  # set current state

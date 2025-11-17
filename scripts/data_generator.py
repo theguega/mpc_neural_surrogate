@@ -1,3 +1,5 @@
+import argparse
+
 import h5py
 import numpy as np
 from mpc_surrogate.mpc_controller import MPCController
@@ -15,8 +17,6 @@ def sample_3d_cartesian_target(env):
 
     Args:
         env: MuJoCo environment (needed for IK validation)
-        link_lengths: Tuple of (link1, link2, link3) lengths
-        max_attempts: Maximum number of sampling attempts before giving up
 
     Returns:
         np.array: A validated reachable target position [x, y, z]
@@ -62,72 +62,77 @@ def sample_3d_cartesian_target(env):
 
 def generate_data(num_episodes=100, episode_max_length=150, filename="data/robot_mpc_dataset.h5"):
     """
-    Generate dataset for learning an MPC controller.
-    Inputs  : [joint positions + joint velocities]
-    Targets : end-effector (EE) target positions
-    Actions : torques from MPC only
+    Generate dataset for MPC imitation learning.
+
+        episodes/
+            ep_0000/states  (T, 6)
+            ep_0000/targets (T, 3)
+            ep_0000/actions (T, 3)
     """
 
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
     controller = MPCController(dt=0.05, prediction_horizon=20)
     n_sim_steps_per_mpc_step = int(controller.dt / env.model.opt.timestep)
 
-    all_states, all_targets, all_actions = [], [], []
-
     print(f"--- Generating {num_episodes} episodes ---")
 
-    for episode in tqdm(range(num_episodes), desc="Episodes"):
-        obs = env.reset()
-        target_xyz = sample_3d_cartesian_target(env)
-        _, target_joint_pos = solve_inverse_kinematics(env, target_xyz)
-
-        # temporary storage for this episode
-        ep_states = []
-        ep_targets = []
-        ep_actions = []
-
-        converged = False
-
-        for step in range(episode_max_length):
-            current_state = obs[:6]
-            tau_mpc, solved = controller.solve(current_state, target_joint_pos)
-
-            if solved:
-                tau_static = env.data.qfrc_bias.copy()
-                total_tau = tau_mpc + tau_static
-
-                ep_states.append(current_state)
-                ep_targets.append(target_xyz)
-                ep_actions.append(tau_mpc)
-
-                for _ in range(n_sim_steps_per_mpc_step):
-                    obs, _, _, _ = env.step(total_tau)
-
-            # check if target reached
-            ee_pos = env.get_ee_position()
-            if np.linalg.norm(ee_pos - target_xyz) < TOL:
-                print(f"Early stop in episode {episode} at step {step}")
-                converged = True
-                break
-
-        # keep this episode only if converged
-        if converged:
-            all_states.extend(ep_states)
-            all_targets.extend(ep_targets)
-            all_actions.extend(ep_actions)
-        else:
-            print(f"Episode {episode} discarded (did not converge).")
-
+    # Create HDF5 file + episode group
     with h5py.File(filename, "w") as f:
-        f.create_dataset("states", data=np.array(all_states), compression="gzip")
-        f.create_dataset("targets", data=np.array(all_targets), compression="gzip")
-        f.create_dataset("actions", data=np.array(all_actions), compression="gzip")
+        episodes_group = f.create_group("episodes")
+        episode_index = 0
 
-    print(f"--- Data Generation Complete ---\nSaved to: {filename}")
-    print(f"States:  {np.array(all_states).shape}")
-    print(f"Targets: {np.array(all_targets).shape}")
-    print(f"Actions: {np.array(all_actions).shape}")
+        for episode in tqdm(range(num_episodes), desc="Episodes"):
+            obs = env.reset()
+            target_xyz = sample_3d_cartesian_target(env)
+            _, target_joint_pos = solve_inverse_kinematics(env, target_xyz)
+
+            ep_states = []
+            ep_targets = []
+            ep_actions = []
+
+            converged = False
+
+            for step in range(episode_max_length):
+                current_state = obs[:6]
+                tau_mpc, solved = controller.solve(current_state, target_joint_pos)
+
+                if solved:
+                    tau_static = env.data.qfrc_bias.copy()
+                    total_tau = tau_mpc + tau_static
+
+                    ep_states.append(current_state)
+                    ep_targets.append(target_xyz)
+                    ep_actions.append(tau_mpc)
+
+                    for _ in range(n_sim_steps_per_mpc_step):
+                        obs, _, _, _ = env.step(total_tau)
+
+                ee_pos = env.get_ee_position()
+                if np.linalg.norm(ee_pos - target_xyz) < TOL:
+                    print(f"Early stop in episode {episode} at step {step}")
+                    converged = True
+                    break
+
+            if converged:
+                # Save this episode as its own group
+                g = episodes_group.create_group(f"ep_{episode_index:04d}")
+                g.create_dataset("states", data=np.array(ep_states), compression="gzip")
+                g.create_dataset("targets", data=np.array(ep_targets), compression="gzip")
+                g.create_dataset("actions", data=np.array(ep_actions), compression="gzip")
+
+                episode_index += 1
+
+            else:
+                print(f"Episode {episode} discarded (did not converge).")
+
+        print("\n--- Data Generation Complete ---")
+        print(f"Saved {episode_index} valid episodes to: {filename}")
 
 
 if __name__ == "__main__":
-    generate_data(num_episodes=20, episode_max_length=1000)
+    args = argparse.ArgumentParser()
+    args.add_argument("-e", "--num_episodes", type=int, default=20)
+    args.add_argument("-m", "--episode_max_length", type=int, default=150)
+    args = args.parse_args()
+
+    generate_data(num_episodes=args.num_episodes, episode_max_length=args.episode_max_length)
