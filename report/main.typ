@@ -158,15 +158,18 @@ $
 
 where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque.
 
-We investigate two different loss functions:
+Loss function investigation: A key hyperparameter in our study is the choice of the loss function L. We will conduct a comparative analysis of two primary candidates:
 
 - Mean Squared Error (MSE)
 - Mean Absolute Error (MAE)
 
-#set quote(block: true)
-#quote(attribution: [@deAPorto2025])[
-  From this paper : For the loss metrics, we employed Mean Absolute Error (MAE) for both the regression and classification outputs. Hyperparameter tuning revealed that MAE outperformed other regression loss functions such as mean squared error.
-]
+MSE Heavily penalizes large errors, which can lead to smoother policies but may make the model sensitive to outliers. MAE is more robust to outliers and may lead to more stable training. The final selection will be based on which loss function yields the best offline and online performance across our evaluation metrics.
+
+Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary neural network (NN) architectures to understand the trade-offs between model complexity, temporal awareness, and performance:
+
+1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target, comparable to the $[y_"k", y_"sp,k"]$ input in @PonKumar2018. 
+2. Recurrent Neural Network (LSTM-only): To capture the temporal dependencies inherent in the robotic system's dynamics, we employ a recurrent architecture based on Long Short-Term Memory (LTSM) units. This controuller "captures the dependency of $u_"t+1"$ on the past inputs, outputs and set-points" @PonKumar2018. The network takes a sequence of these state-target vectors as input and maps the final hidden state to the action space.
+3. LSTM-Supported Feedforward Network (LSTMSNN): 
 
 3 main architectures to try, from this paper @PonKumar2018 :
 
