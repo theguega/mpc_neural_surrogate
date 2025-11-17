@@ -1,36 +1,28 @@
-#import "@preview/bloated-neurips:0.7.0": botrule, midrule, neurips2025, paragraph, toprule, url
+#import "@preview/charged-ieee:0.1.4": ieee
 
-#let affls = (
-  waterloo-theo: (
-    institution: "University of Waterloo",
-    department: "21229606",
-    country: "Canada"),
-  waterloo-dexter: (
-    institution: "University of Waterloo",
-    department: "21230211",
-    country: "Canada"),
-)
+#set page(numbering: "1")
 
-#let authors = (
-  (name: "Theo Guegan",
-   affl: "waterloo-theo",
-   email: "tguegan@uwaterloo.ca",
-   equal: true),
-  (name: "Wen Jie Dexter Teo",
-   affl: "waterloo-dexter",
-   email: "d2teo@uwaterloo.ca",
-   equal: false),
-)
-
-#show: neurips2025.with(
+#show: ieee.with(
   title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators],
-  authors: (authors, affls),
-  keywords: ("Behavior Cloning", "MPC", "Robotics", "Deep Learning"),
   abstract: [
     This paper investigates the application of behavior cloning to approximate Model Predictive Control (MPC) policies for real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining inverse kinematics (IK) with MPC, systematically evaluate multiple neural network architectures—including feedforward networks and recurrent neural networks (RNNs)—to learn computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and trade-offs between different architectural choices. The proposed methodology demonstrates that neural network policies can achieve real-time performance while maintaining control accuracy, providing a viable path toward deploying complex optimal control strategies on computationally constrained platforms.
   ],
-  bibliography: bibliography("main.bib"),
-  accepted: true,
+  authors: (
+    (
+      name: "Theo Guegan",
+      department: [21229606],
+      organization: [University of Waterloo],
+      email: "tguegan@uwaterloo.ca"
+    ),
+    (
+      name: "Wen Jie Dexter Teo",
+      department: [21230211],
+      organization: [University of Waterloo],
+      email: "d2teo@uwaterloo.ca"
+    ),
+  ),
+  bibliography: bibliography("refs.bib"),
+  figure-supplement: [Fig.],
 )
 
 = Introduction
@@ -108,8 +100,6 @@ $
 
 The MPC modules is given the desired joint angles $q_"des" in RR^3$ from the IK module and computes optimal control torques $tau_"MPC"$ with a specified prediction horizon. We can simplify our system dynamics and represent it as a simplified double-integrator model as MuJoCo is used to compensate dynamics including gravity or joint friction.
 
-#pagebreak()
-
 Our simplified dynamic system can be defined as :
 
 $
@@ -167,9 +157,9 @@ MSE Heavily penalizes large errors, which can lead to smoother policies but may 
 
 Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary neural network (NN) architectures to understand the trade-offs between model complexity, temporal awareness, and performance:
 
-1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target, comparable to the $[y_"k", y_"sp,k"]$ input in @PonKumar2018. 
+1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target, comparable to the $[y_"k", y_"sp,k"]$ input in @PonKumar2018.
 2. Recurrent Neural Network (LSTM-only): To capture the temporal dependencies inherent in the robotic system's dynamics, we employ a recurrent architecture based on Long Short-Term Memory (LTSM) units. This controuller "captures the dependency of $u_"t+1"$ on the past inputs, outputs and set-points" @PonKumar2018. The network takes a sequence of these state-target vectors as input and maps the final hidden state to the action space.
-3. LSTM-Supported Feedforward Network (LSTMSNN): 
+3. LSTM-Supported Feedforward Network (LSTMSNN):
 
 3 main architectures to try, from this paper @PonKumar2018 :
 
