@@ -159,11 +159,11 @@ episodes/
     └── actions : (T₁ × 3)
 ```
 
-This format allows us to easily process an episode at a time (fittable for both MLP of RNN achitecture), and to split the dataset into training and validation sets regardless of the episode length.
+This format allows us to easily process an episode at a time (fittable for both MLP and RNN achitecture), and to split the dataset into training and validation sets regardless of the episode length.
 
 == Data Preprocessing
 
-Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $["q1", "q2", "q3", "q̇1", "q̇2", "q̇3"]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances.
+Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances.
 
 Because our data generation pipeline allows us to generate as many samples as needed, we can easily collect a large dataset for training our neural network. Therefore, for the training process we can increase the number of samples until we reach a plateau in the validation loss or a computational limit. For the splitting of the dataset, we use a 90/10 split, where 90% of the data is used for training and 10% for the validation as done in this paper @deAPorto2025.
 
@@ -196,18 +196,24 @@ Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary
 
 We evaluate the learned policies using a combination of offline and online metrics:
 1. Offline Metrics (on the test dataset):
-  - Mean Absolute Error (MAE) & Root Mean Squared Error (RMSE): Measure the average deviation of the predicted torques from the expert torques. Comparing these for models trained with the two different losses may be insightful.
+  - Mean Absolute Error (MAE) & Root Mean Squared Error (RMSE): Measure the average deviation of the predicted torques from the expert torques.
+$  
+  "Formula"
+$
   - Explained Variance Score: Measures the proportion of variance in the expert's action that is explained by our model. A score of 1.0 indicates perfect prediction.
 $
   "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
  - Direction Accuracy: The percentage of predictions where the sign of each torque component matches the expert's. This assesses whether the model correctly identifies the direction of joint acceleration.
+$  
+  "Formula"
+$
 
 2. Online Metrics (in MuJoCo simulation):
   - Success Rate: The percentage of simulation episodes where the end-effector reaches within an acceptable threshold of the target position.
   - Average Position Error: The mean Euclidean distance between the end-effector and the target throughout the episode. This confirms if the model is behaving in the right way to minimize the error.
-  - Computational Efficiency: The average inference time of the policy, measured against the baseline MPC to confirm real-time feasibility.
-
+  - Computational Time Efficiency: The average inference time of the policy, measured against the baseline MPC to confirm real-time feasibility.
+  - Computational Cost: CPU Usage 
 = Results
 
 == Offline evaluation
@@ -216,9 +222,9 @@ $
 
 = Future Work
 
-This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling dynamic obstacles and scenarios.
+This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling complex dynamics.
 
-From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies which may be applicable to complex situations involving dynamic obstacles. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning(??) @deAPorto2025
+From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning @deAPorto2025 may prove to be an efficient alternative to learn the underlying MPC cost function.
 
 = Acknowledgments
 
