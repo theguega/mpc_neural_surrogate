@@ -9,3 +9,5 @@ wheels/
 # Virtual environments
 .venv
 tests/test_target_sampling.py
+nn_architectures.pdf
+nn_architectures.png

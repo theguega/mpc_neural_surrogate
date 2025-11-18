@@ -182,37 +182,31 @@ Loss function investigation: A key hyperparameter in our study is the choice of 
 - Mean Squared Error (MSE)
 - Mean Absolute Error (MAE)
 
-MSE Heavily penalizes large errors, which can lead to smoother policies but may make the model sensitive to outliers. MAE is more robust to outliers and may lead to more stable training. The final selection will be based on which loss function yields the best offline and online performance across our evaluation metrics.
+MSE heavily penalizes large errors, which can lead to smoother policies but may make the model sensitive to outliers. MAE is more robust to outliers and may lead to more stable training. The final selection will be based on which loss function yields the best offline and online performance across our evaluation metrics.
 
 Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary neural network (NN) architectures to understand the trade-offs between model complexity, temporal awareness, and performance:
 
-1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target, comparable to the $[y_"k", y_"sp,k"]$ input in @PonKumar2018.
-2. Recurrent Neural Network (LSTM-only): To capture the temporal dependencies inherent in the robotic system's dynamics, we employ a recurrent architecture based on Long Short-Term Memory (LTSM) units. This controuller "captures the dependency of $u_"t+1"$ on the past inputs, outputs and set-points" @PonKumar2018. The network takes a sequence of these state-target vectors as input and maps the final hidden state to the action space.
-3. LSTM-Supported Feedforward Network (LSTMSNN):
-
-3 main architectures to try, from this paper @PonKumar2018 :
-
-- Feed forward network with 1 input state and 1 output state
-- RNN with multiple input states and 1 output state (try GRU and LSTM) + FFN support at the end
-- Feed forward network with multiple input states and 1 output state (RNN like)
-
-include graph here
-
+1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target.
+2. Recurrent Neural Network (LSTM-only): To capture the temporal dependencies inherent in the robotic system's dynamics, we employ a recurrent architecture based on Long Short-Term Memory (LTSM) units. This controller "captures the dependency of $u_"t+1"$ on the past inputs, outputs and set-points" @PonKumar2018. The network takes a sequence of these state-target vectors as input and maps the final hidden state to the action space.
+3. LSTM-Supported Feedforward Network (LSTMSNN): This is a hybrid architecture which combines the benefits of the previous two. As described in @PonKumar2018, its "output is a weighted combination of an LSTM-only controller output and the NN-only controller output". This will allow us to implement a neural network which can "effectively learn an optimal control action given past and current inputs, outputs and set-points". We adapt this structure by using the same input definitions as above for the two pathways.
 
 = Evaluation Methodology
 
 == Metrics
 
-- Computational Efficiency
-- Control performance (RMSE, MAE)
-- Accuracy in simulation (number of successful simulations)
-- Direction accuracy with sign of direction of the torque
-- explained variance ? (proportion of variance in expert action explained by the model)
-
+We evaluate the learned policies using a combination of offline and online metrics:
+- Offline Metrics (on the test dataset):
+  - Mean Absolute Error (MAE) & Root Mean Squared Error (RMSE): Measure the average deviation of the predicted torques from the expert torques. Comparing these for models trained with the two different losses may be insightful.
+  - Explained Variance Score: Measures the proportion of variance in the expert's action that is explained by our model. A score of 1.0 indicates perfect prediction.
 $
-  "Explained Vairance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
+  "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
+ - Direction Accuracy: The percentage of predictions where the sign of each torque component matches the expert's. This assesses whether the model correctly identifies the direction of joint acceleration.
 
+- Online Metrics (in MuJoCo simulation):
+  - Success Rate: The percentage of simulation episodes where the end-effector reaches within an acceptable threshold of the target position.
+  - Average Position Error: The mean Euclidean distance between the end-effector and the target throughout the episode. This confirms if the model is behaving in the right way to minimize the error.
+  - Computational Efficiency: The average inference time of the policy, measured against the baseline MPC to confirm real-time feasibility.
 
 = Results
 
@@ -221,6 +215,9 @@ $
 == Online evaluation (MuJoCo)
 
 = Future Work
+
+This work establishes a baseline for behavior cloning of MPC on a 3-DOF manipulator. There are several promising directions which remain for future research.
+
 
 - improving
 - extandable to more degree of freedom ? 6-DOF ?
