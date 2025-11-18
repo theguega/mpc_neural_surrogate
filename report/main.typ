@@ -218,15 +218,7 @@ $
 
 This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling dynamic obstacles and scenarios.
 
-From a methodological perspective, exploring advanced neural network architectures represents a promising direction. 
-
-Specifically, like Transformers or Legendre Memory Units (LMUs) @NEURIPS2019_952285b9 may better
-- improving
-- extandable to more degree of freedom ? 6-DOF ?
-- more complex controller (Non linear MPC for real-life scenarios)
-- other methodology :
-  - Transfomer or Legendre Memory Unit (LMU) @NEURIPS2019_952285b9
-  - Inverse reinforcement learning (IRL) @deAPorto2025
+From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies which may be applicable to complex situations involving dynamic obstacles. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning(??) @deAPorto2025
 
 = Acknowledgments
 
