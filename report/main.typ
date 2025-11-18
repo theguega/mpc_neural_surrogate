@@ -195,7 +195,7 @@ Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary
 == Metrics
 
 We evaluate the learned policies using a combination of offline and online metrics:
-- Offline Metrics (on the test dataset):
+1. Offline Metrics (on the test dataset):
   - Mean Absolute Error (MAE) & Root Mean Squared Error (RMSE): Measure the average deviation of the predicted torques from the expert torques. Comparing these for models trained with the two different losses may be insightful.
   - Explained Variance Score: Measures the proportion of variance in the expert's action that is explained by our model. A score of 1.0 indicates perfect prediction.
 $
@@ -203,7 +203,7 @@ $
 $
  - Direction Accuracy: The percentage of predictions where the sign of each torque component matches the expert's. This assesses whether the model correctly identifies the direction of joint acceleration.
 
-- Online Metrics (in MuJoCo simulation):
+2. Online Metrics (in MuJoCo simulation):
   - Success Rate: The percentage of simulation episodes where the end-effector reaches within an acceptable threshold of the target position.
   - Average Position Error: The mean Euclidean distance between the end-effector and the target throughout the episode. This confirms if the model is behaving in the right way to minimize the error.
   - Computational Efficiency: The average inference time of the policy, measured against the baseline MPC to confirm real-time feasibility.
@@ -216,9 +216,11 @@ $
 
 = Future Work
 
-This work establishes a baseline for behavior cloning of MPC on a 3-DOF manipulator. There are several promising directions which remain for future research.
+This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling dynamic obstacles and scenarios.
 
+From a methodological perspective, exploring advanced neural network architectures represents a promising direction. 
 
+Specifically, like Transformers or Legendre Memory Units (LMUs) @NEURIPS2019_952285b9 may better
 - improving
 - extandable to more degree of freedom ? 6-DOF ?
 - more complex controller (Non linear MPC for real-life scenarios)
