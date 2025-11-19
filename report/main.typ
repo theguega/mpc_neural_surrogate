@@ -175,7 +175,7 @@ $
   min_theta quad L(pi_theta(X), tau_"MPC")
 $
 
-where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque.
+where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC.
 
 Loss function investigation: A key hyperparameter in our study is the choice of the loss function L. We will conduct a comparative analysis of two primary candidates:
 
@@ -184,29 +184,56 @@ Loss function investigation: A key hyperparameter in our study is the choice of 
 
 MSE heavily penalizes large errors, which can lead to smoother policies but may make the model sensitive to outliers. MAE is more robust to outliers and may lead to more stable training. The final selection will be based on which loss function yields the best offline and online performance across our evaluation metrics.
 
-Inspired by the work of Pon Kumar et al. @PonKumar2018, we investigate 3 primary neural network (NN) architectures to understand the trade-offs between model complexity, temporal awareness, and performance:
+== Scikit-Learn Models
 
-1. Feedforward Network (NN-only): This architecture serves as our baseline. It is a memory-less controller which "captures the MPC response based on current control actions and current outputs by discarding the past" @PonKumar2018. For our problem, the input is the concatenated vector $x_k = [q_k, dot(q)_k, q_"des"]$, which is mapped directly to torque through multiple fully-connected layers. This vector incorporates the current state and target.
-2. Recurrent Neural Network (LSTM-only): To capture the temporal dependencies inherent in the robotic system's dynamics, we employ a recurrent architecture based on Long Short-Term Memory (LTSM) units. This controller "captures the dependency of $u_"t+1"$ on the past inputs, outputs and set-points" @PonKumar2018. The network takes a sequence of these state-target vectors as input and maps the final hidden state to the action space.
-3. LSTM-Supported Feedforward Network (LSTMSNN): This is a hybrid architecture which combines the benefits of the previous two. As described in @PonKumar2018, its "output is a weighted combination of an LSTM-only controller output and the NN-only controller output". This will allow us to implement a neural network which can "effectively learn an optimal control action given past and current inputs, outputs and set-points". We adapt this structure by using the same input definitions as above for the two pathways.
+As baseline comparisons, we evaluate several models from the Scikit-Learn library.
+
+1. Random Forest Regressor: A method which averages predictions from multiple decision trees, reducing overfitting and providing good performance.
+2. Gradient Boosting Regressor: An ensemble technique that builds trees sequentially, where each tree focuses on correcting the errors made by its predecessor.
+3. MLPRegressor: A standard, multi-layer perceptron implementation provided by Scikit-Learn, serving as a baseline deep learning model.
+
+== Custom Multi-Layer Perceptron (MLP)
+
+We design a custom feedforward neural network to serve as a more powerful baseline than Scikit-Learn's MLPRegressor.
+- Input Layer: 9 neurons for the state-target vector
+- Output Layer: 3 linear neurons for the torque prediction $hat(tau)$
+
+This is a memory-less architecture which captures and learns the mapping from the current state and target to the required control action.
+
+== Time Series Models
+
+To capture the temporal dependencies inherent in the robotic system's dynamics, we employ recurrent architectures. These controllers capture the dependency of $u_"t+1"$ on the past inputs, outputs and set-points @PonKumar2018, and predict the current torque.
+1. RNN: A simple recurrent network using tanh activation.
+2. GRU (Gated Recurrent Unit): A gated architecture which can capture longer-term dependencies than a simple RNN.
+3. LSTM (Long Short-Term Memory): A gated architecture explicitly designed to learn long-range dependencies, making it well-suited for dynamic control tasks.
+
+For all the recurrent models, the final hidden state is passed through a linear output layer to produce the predicted torque $hat(tau)$.
+
+== Transformer Architecture
+
+If time permits, we will investigate a simplified Transformer model. The self-attention mechanism allows the model to weigh the importance of different states in the sequence dynamically, potentially learning the underlying system dynamics more effectively than RNNs.
 
 = Evaluation Methodology
-
-== Metrics
 
 We evaluate the learned policies using a combination of offline and online metrics:
 1. Offline Metrics (on the test dataset):
   - Mean Absolute Error (MAE) & Root Mean Squared Error (RMSE): Measure the average deviation of the predicted torques from the expert torques.
 $  
-  "Formula"
+  "MAE" = (1/n)sum_(i=0)^n abs(tau_"MPC,i" - hat(tau_"i"))
+$
+$
+  "RMSE" = sqrt((1/n)sum_(i=0)^n (tau_"MPC,i" - hat(tau_"i"))^2)
 $
   - Explained Variance Score: Measures the proportion of variance in the expert's action that is explained by our model. A score of 1.0 indicates perfect prediction.
 $
   "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
- - Direction Accuracy: The percentage of predictions where the sign of each torque component matches the expert's. This assesses whether the model correctly identifies the direction of joint acceleration.
+ - Direction Accuracy (DA): The percentage of predictions where the sign of each torque component matches the expert's. This assesses whether the model correctly identifies the direction of joint acceleration.
 $  
-  "Formula"
+  "DA" = 1/"3n"sum_(i=1)^n sum_(j=1)^3 cases(
+    1 "if" "sign"(tau_"MPC,i,j") = "sign"(hat(tau)_"i,j"),
+    0 "otherwise"
+  )
 $
 
 2. Online Metrics (in MuJoCo simulation):
