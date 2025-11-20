@@ -189,34 +189,34 @@ Our goal is to develop a robust and reliable controller that can handle uncertai
 
 = Neural Network Architecture
 
-We first formulate the learning problem as a regression task, where the goal is to predict the torque $tau_"MPC"$ given the current state $x_k$ and the target $p_"des"$. We want to minimize the error between the neural network policy $pi_theta$ and the expert MPC actions :
+We first formulated the learning problem as a regression task, where the goal was to predict the torque $tau_"MPC"$ given the current state $x_k$ and the target $p_"des"$. We aimed to minimize the error between the neural network policy $pi_theta$ and the expert MPC actions:
 
 $
   min_theta quad L(pi_theta(X), tau_"MPC")
 $
 
-where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC policy. For this task, we compare the performance with 2 different loss functions:
+where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigated a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC policy. For this task, we compared the performance with 2 different loss functions:
 - Mean Squared Error (MSE)
 - Mean Absolute Error (MAE)
 
 == Regression Baselines
 
-As baselines, we evaluate several models from the scikit-learn library to establish performance benchmarks. These models operate on the flat dataset, treating each timestep as an independent sample. We include tree-based regressors (Random Forest and Gradient Boosting) and a shallow MLP regressor as a lightweight baseline to compare against our deeper custom architectures.
+As baselines, we evaluated several models from the scikit-learn library to establish performance benchmarks. These models operate on the flat dataset, treating each timestep as an independent sample. We included tree-based regressors (Random Forest and Gradient Boosting) and a shallow MLP regressor as a lightweight baseline to compare against our deeper custom architectures.
 
 == Custom Multi-Layer Perceptron (MLP)
 
-We implement a custom feedforward network to explore the impact of model capacity on cloning accuracy. This model processes the flat input vector through a series of fully connected linear layers with ReLU activations. We conduct an architectural search by varying:
+We implemented a custom feedforward network to explore the impact of model capacity on cloning accuracy. This model processes the flat input vector through a series of fully connected linear layers with ReLU activations. We conducted an architectural search by varying:
   - Depth: Number of hidden layers.
   - Width: Number of neurons per layer
 This memory-less architecture captures and learns directly the mapping from the current state and target to the required control action.
 
 == Time Series Models
 
-To leverage the temporal structure of our system, we also employ sequential architectures. Unlike the flat models, these architectures maintain a history of past inputs and outputs to predict the current torque @PonKumar2018.
+To leverage the temporal structure of our system, we also employed sequential architectures. Unlike the flat models, these architectures maintain a history of past inputs and outputs to predict the current torque @PonKumar2018.
 
 === Recurrent Neural Networks (RNNs)
 
-We evaluate both Long Short-Term Memory (LSTM) and Gated Recurrent Units (GRU) networks. These models maintain a hidden state $h_t$​ that summarizes the history of the episode up to time $t-1$. For all the recurrent models, the final hidden state is passed through a linear output layer to produce the predicted torque $pi_theta(X)$. Here again, we can vary the number of hidden units per layer and the number of layers.
+We evaluated both Long Short-Term Memory (LSTM) and Gated Recurrent Units (GRU) networks. These models maintain a hidden state $h_t$​ that summarizes the history of the episode up to time $t-1$. For all the recurrent models, the final hidden state was passed through a linear output layer to produce the predicted torque $pi_theta(X)$. Here again, we varied the number of hidden units per layer and the number of layers.
 
 $
   h_t = "RNN"(x_t, h_(t-1)), quad pi_theta(X) = "Linear"(h_t)
@@ -228,10 +228,10 @@ If time permits, we will investigate a Transformer model. Unlike RNNs, the multi
 
 = Evaluation Methodology
 
-We evaluate the learned policies using a combination of offline and online metrics:
+We evaluated the learned policies using a combination of offline and online metrics:
 
 == Offline Metrics
-We use Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
+We used Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
 
 $
   "MAE"_j = 1/N sum_(i=0)^n abs(tau_"MPC,i,j" - pi_theta (X_i)_j)
@@ -239,19 +239,19 @@ $
 $
   "RMSE"_j = 1/N sum_(i=0)^n norm(tau_"MPC,i,j" - pi_theta (X_i)_j)^2_2
 $
- We also evaluate the percentage of predictions where the sign of each torque component matches the expert's using Direction Accuracy (DA). This assesses whether the model correctly identifies the direction of joint acceleration.
+ We also evaluated the percentage of predictions where the sign of each torque component matches the expert's using Direction Accuracy (DA). This assesses whether the model correctly identifies the direction of joint acceleration.
 $
   "DA" = 1/(3N) sum_(i=0)^N sum_(j=1)^3 II ("sign"(tau_"MPC,i,j") = "sign"(pi_theta (X_i)_j))
 $
 
-Finally, we measure the proportion of variance in the expert's action that is explained by our model, using explained variance. It is a normalized, scale-invariant metric for comparing performance defined as follows:
+Finally, we measured the proportion of variance in the expert's action that is explained by our model, using explained variance. It is a normalized, scale-invariant metric for comparing performance defined as follows:
 $
   "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
 
 == Online Metrics
 
-To assess the closed-loop performance, we deploy the trained policies in our simulation environment and evaluate them on the following criteria:
+To assess the closed-loop performance, we deployed the trained policies in our simulation environment and evaluated them on the following criteria:
 
 - Success Rate: The percentage of episodes where the end-effector's final position converges within a specified tolerance $epsilon$ of the target
 $
