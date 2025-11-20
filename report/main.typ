@@ -195,7 +195,7 @@ $
   min_theta quad L(pi_theta(X), tau_"MPC")
 $
 
-where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC policy. For this task we compare the performance with 2 different loss functions :
+where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC policy. For this task, we compare the performance with 2 different loss functions:
 - Mean Squared Error (MSE)
 - Mean Absolute Error (MAE)
 
