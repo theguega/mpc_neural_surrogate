@@ -27,7 +27,7 @@
 
 = Introduction
 
-Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks may offer a promising and computationally efficient alternative for approximating MPC policies with different architectures @gonzalez2024neuralnetworksfastoptimisation. We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector (EE) to reach a 3D cartesian target position within the robot's reachable workspace. Inspired by the recent usage of imitation learning for complex controls @deAPorto2025, we present a complete data generation pipeline for collecting high-quality demonstrations of the desired behavior and an empirical evaluation of both feedforward and recurrent neural networks for policy learning. Our experiment focuses on minimizing the control error and testing the ability of the learned policy to generalize in the simulation environment.
+Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks, with their diverse architectures, offer a promising and computationally efficient alternative for approximating MPC policies @gonzalez2024neuralnetworksfastoptimisation. We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector (EE) to reach a 3D cartesian target position within the robot's reachable workspace. Inspired by the recent usage of imitation learning for complex controls @deAPorto2025, we present a complete data generation pipeline for collecting high-quality demonstrations of the desired behavior and an empirical evaluation of both feedforward and recurrent neural networks for policy learning. Our experiment focuses on minimizing the control error and testing the ability of the learned policy to generalize in the simulation environment.
 
 = Problem Formulation
 
@@ -58,13 +58,13 @@ The manipulator operates in a MuJoCo simulation environment (@fig:3dof-arm-mujoc
 )
 
 
-= Baseline Controller : MPC with Inverse Kinematics
+= Baseline Controller: MPC with Inverse Kinematics
 
 Our baseline controller uses a hierarchical architecture combining an Inverse Kinematics (IK) module and a Model Predictive Control (MPC) module. The IK module computes the joint angles required to achieve the desired end-effector position, while the MPC module optimizes the joint velocities to minimize the control error.
 
 == Inverse Kinematics Formulation
 
-The IK module translates desired end-effector positions into feasible joint-space configurations. Let $p(q): RR^3 -> RR^3$ denote the forward kinematics mapping. The Cartesian error is defined as :
+The IK module translates desired end-effector positions into feasible joint-space configurations. Let $p(q): RR^3 -> RR^3$ denote the forward kinematics mapping. The Cartesian error is defined as:
 
 $
  e = p_"des" - p(q)
@@ -94,27 +94,25 @@ $
 
 == Model Predictive Control Formulation
 
-The MPC modules is given the desired joint angles $q_"des" in RR^3$ from the IK module and computes optimal control torques $tau_"MPC"$ with a specified prediction horizon. We can simplify our system dynamics and represent it as a simplified double-integrator model as MuJoCo is used to compensate dynamics including gravity or joint friction. Our simplified dynamic system can be defined as :
+The MPC module is given the desired joint angles $q_"des" in RR^3$ from the IK module and computes optimal control torques $tau_"MPC"$ with a specified prediction horizon. We simplify the system dynamics for the MPC formulation by assuming unit inertia and neglecting Coriolis effects, justified by MuJoCo's compensation of complex dynamics including gravity and friction. This yields a double-integrator model where the control input $tau_"MPC"$ effectively commands joint acceleration:
 
 $
   dot.double(q) = tau_"MPC"
 $
 
-With $x = [q, dot(q)]^T in RR^6$ and discrete-time dynamics :
+With $x = [q, dot(q)]^T in RR^6$ and discrete-time dynamics:
 
 $
   x_(k+1) = x_k + Delta t * vec(dot(q)_k, tau_"MPC,k", delim: "[") = f(x_k,tau_k)
 $
 
-where $x = [q, dot(q)]^T in RR^6$
-
-The MPC solves a finite-horizon optimal control problem with quadratic cost function :
+The MPC solves a finite-horizon optimal control problem with quadratic cost function:
 
 $
   min_(tau_(0:N-1)) quad sum_(k=0)^(N-1) (norm(x_k - x_"ref")_"Q"^2 + norm(tau_k)_"R"^2) + norm(x_N - x_"ref")_"Q"_"N"^2
 $<cost-function>
 
-subject to :
+subject to:
 
 $
   x_"k+1" = f(x_k,tau_k), quad x_0 = x(t), quad tau_min <= tau_k <= tau_max
@@ -124,21 +122,21 @@ Where $x_"ref" = [q_"des", 0^T]^T$ is the target state, and $bold(Q), bold(R), b
 
 = Data Generation Pipeline
 
-To enable behavior-cloning from the expert IK-MPC controller, we generate a dataset of joint angles, joint velocities, target, and predicted torques from the closed-loop MuJoCo simulation. The process for each episode is as follows:
+To enable behavior-cloning from the expert IK-MPC controller, we generated a dataset of joint angles, joint velocities, target, and predicted torques from the closed-loop MuJoCo simulation. The process for each episode was as follows:
 
 == Collection process
 
-1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ is sampled within the workspace $cal(W)$, for this purpose we use cylindrical coordinates to sample a radius $r$ and height $z$ uniformly within the maximum workspace dimensions.
-2. The IK solver computes the corresponding joint-space reference $q_"des"$.
+1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ was sampled within the workspace $cal(W)$, for this purpose we use cylindrical coordinates to sample a radius $r$ and height $z$ uniformly within the maximum workspace dimensions.
+2. The IK solver computed the corresponding joint-space reference $q_"des"$.
 3. The MPC controller generates torque commands $tau_"MPC"$ to achieve the desired joint angles and velocities, given the current state $x_k$ and a specified prediction horizon $N$.
-4. For each time step $k$, we record the current state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3] in RR^6$, the target $p_"des" in RR^3$, and the predicted torque $tau_"MPC" in RR^3$.
-5. We step the simulation until the end of the episode or until the target is reached using $tau = tau_"MPC" + tau_"env"$ (with $tau_"env"$ from MuJoCo bias force : `mjData.qfrc_bias`).
+4. For each time step $k$, we recorded the current state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3] in RR^6$, the target $p_"des" in RR^3$, and the predicted torque $tau_"MPC" in RR^3$.
+5. We stepped the simulation until the end of the episode or until the target is reached using $tau = tau_"MPC" + tau_"env"$ (where $tau_"env"$ represents the forces computed by MuJoCo to compensate for Coriolis, centrifugal, and gravitational effects, ensuring the simplified dynamics model in the MPC controller remains valid. MuJoCo bias force: `mjData.qfrc_bias`).
 
 During this process, if either the MPC controller or the IK solver fails to converge, we discard the data for that time step to keep only high-quality data.
 
 == Dataset Structure
 
-After generation, the dataset is stored in an episode-based format within a HDF5 file.
+After generation, the dataset was stored in an episode-based format within a HDF5 file.
 
 #figure(
   align(left)[
@@ -187,7 +185,7 @@ Where $E$ is the number of episodes and $T$ is the number of timesteps per episo
 
 == Data Preprocessing
 
-Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances. Because our data generation pipeline allows us to generate as many samples as needed, we can easily collect a large dataset for training our neural network. Therefore, for the training process we can increase the number of samples until we reach a plateau in the validation loss or a computational limit. For the splitting of the dataset, we use a 80/20 split, where 80% of the data is used for training and 20% for the validation.
+Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances. Given that the data generation pipeline can produce an arbitrary number of samples, a large dataset was collected for training our neural network. Therefore, for the training process we can increase the number of samples until we reach a plateau in the validation loss or a computational limit. For the splitting of the dataset, we use a 80/20 split, where 80% of the data is used for training and 20% for the validation.
 
 = Neural Network Architecture
 
@@ -197,13 +195,13 @@ $
   min_theta quad L(pi_theta(X), tau_"MPC")
 $
 
-where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC. For this task we compare the performance with 2 different loss functions :
+where $L$ is a loss function that measures the difference between the predicted torque and the expert MPC torque. We investigate a range of models, from traditional machine learning to deep learning architecture, to understand their effectiveness in approximating the MPC policy. For this task we compare the performance with 2 different loss functions :
 - Mean Squared Error (MSE)
 - Mean Absolute Error (MAE)
 
 == Regression Baselines
 
-As baseline comparisons, we evaluate several models from the Scikit-Learn library. To establish a performance benchmark, we utilize standard implementations from scikit-learn. These models operate on the flat dataset, treating each timestep as independent. First, Random Forest Regressor and Gradient Boosting Regressor which are tree-based algorithms. And second, a shallow MLP Regressor as baseline to compare against deeper custom architectures.
+As baselines, we evaluate several models from the scikit-learn library to establish performance benchmarks. These models operate on the flat dataset, treating each timestep as an independent sample. We include tree-based regressors (Random Forest and Gradient Boosting) and a shallow MLP regressor as a lightweight baseline to compare against our deeper custom architectures.
 
 == Custom Multi-Layer Perceptron (MLP)
 
@@ -214,7 +212,7 @@ This memory-less architecture captures and learns directly the mapping from the 
 
 == Time Series Models
 
-To leverage the temporal structure of our system, we also employ sequence architectures. Unlike the flat models, these architectures maintain a history of past inputs, outputs to predict the current torque @PonKumar2018.
+To leverage the temporal structure of our system, we also employ sequential architectures. Unlike the flat models, these architectures maintain a history of past inputs and outputs to predict the current torque @PonKumar2018.
 
 === Recurrent Neural Networks (RNNs)
 
@@ -246,7 +244,7 @@ $
   "DA" = 1/(3N) sum_(i=0)^N sum_(j=1)^3 II ("sign"(tau_"MPC,i,j") = "sign"(pi_theta (X_i)_j))
 $
 
-Finally, we measure the proportion of variance in the expert's action that is explained by our model, using explained variance. It's a normalized, scale-invariant metric for comparing performance defined as follows.
+Finally, we measure the proportion of variance in the expert's action that is explained by our model, using explained variance. It's a normalized, scale-invariant metric for comparing performance defined as follows:
 $
   "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
@@ -257,11 +255,11 @@ To assess the closed-loop performance, we deploy the trained policies in our sim
 
 - Success Rate: The percentage of episodes where the end-effector's final position converges within a specified tolerance $epsilon$ of the target
 $
-  norm(p_"final" - p_"target")_2 < epsilon
+  norm(p_"final" - p_"des")_2 < epsilon
 $
 - Average Position Error: The mean Euclidean distance between the end-effector and the target across the entire trajectory. This verifies that the model actively minimizes error rather than just drifting near the goal.
 - Computational Time Efficiency: The average inference latency per control step. We compare this against the baseline MPC solution time to confirm that the neural networks achieve higher control frequencies.
-- Computational Cost: Average CPU utilization during operation, ensuring the surrogate model is sufficiently lightweight for potential embedded deployment.
+- Computational Cost: Average CPU utilization during operation, ensuring the surrogate model is sufficiently lightweight for potential deployment on embedded systems.
 
 = Results
 == Offline evaluation
