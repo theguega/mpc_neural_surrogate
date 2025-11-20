@@ -122,21 +122,21 @@ Where $x_"ref" = [q_"des", 0^T]^T$ is the target state, and $bold(Q), bold(R), b
 
 = Data Generation Pipeline
 
-To enable behavior-cloning from the expert IK-MPC controller, we generated a dataset of joint angles, joint velocities, target, and predicted torques from the closed-loop MuJoCo simulation. The process for each episode was as follows:
+To enable behavior cloning from the expert IK–MPC controller, we generate a dataset of joint angles, joint velocities, target positions, and predicted torques from the closed-loop MuJoCo simulation. The process for each episode is as follows:
 
 == Collection process
 
-1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ was sampled within the workspace $cal(W)$, for this purpose we use cylindrical coordinates to sample a radius $r$ and height $z$ uniformly within the maximum workspace dimensions.
-2. The IK solver computed the corresponding joint-space reference $q_"des"$.
+1. Target sampling: A reachable end-effector target $p_"des" in RR^3$ is sampled within the workspace $cal(W)$ using cylindrical coordinates to sample a radius $r$ and height $z$ uniformly within the workspace bounds.
+2. The IK solver computes the corresponding joint-space reference $q_"des"$.
 3. The MPC controller generates torque commands $tau_"MPC"$ to achieve the desired joint angles and velocities, given the current state $x_k$ and a specified prediction horizon $N$.
-4. For each time step $k$, we recorded the current state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3] in RR^6$, the target $p_"des" in RR^3$, and the predicted torque $tau_"MPC" in RR^3$.
-5. We stepped the simulation until the end of the episode or until the target is reached using $tau = tau_"MPC" + tau_"env"$ (where $tau_"env"$ represents the forces computed by MuJoCo to compensate for Coriolis, centrifugal, and gravitational effects, ensuring the simplified dynamics model in the MPC controller remains valid. MuJoCo bias force: `mjData.qfrc_bias`).
+4. For each time step $k$, we record the current state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3] in RR^6$, the target $p_"des" in RR^3$, and the predicted torque $tau_"MPC" in RR^3$.
+5. We step the simulation until the end of the episode or until the target is reached using $tau = tau_"MPC" + tau_"env"$ (where $tau_"env"$ represents the forces computed by MuJoCo to compensate for Coriolis, centrifugal, and gravitational effects, ensuring the simplified dynamics model in the MPC controller remains valid; MuJoCo bias force: `mjData.qfrc_bias`).
 
-During this process, if either the MPC controller or the IK solver fails to converge, we discard the data for that time step to keep only high-quality data.
+During this process, if either the MPC controller or the IK solver fails to converge, we discard the data for that time step to retain only high-quality samples.
 
 == Dataset Structure
 
-After generation, the dataset was stored in an episode-based format within a HDF5 file.
+After generation, the dataset is stored in an episode-based format within a HDF5 file.
 
 #figure(
   align(left)[
@@ -154,14 +154,14 @@ After generation, the dataset was stored in an episode-based format within a HDF
   caption: [Hierarchical HDF5 dataset structure],
 )<dataset-structure>
 
-This hierarchical format preserves the temporal integrity of each trial, allowing us to process the data differently depending on the model architecture. The raw data is loaded via a custom MPCDataset class which constructs the input feature vector x by concatenating the state ($RR^6$) and the target ($RR^3$), resulting in a 9-dimensional input vector.
+This hierarchical format preserves the temporal integrity of each trial, allowing us to process the data differently depending on the model architecture. The raw data is loaded via a custom MPCDataset class, which constructs the input feature vector $x$ by concatenating the state ($RR^6$) and the target ($RR^3$), resulting in a 9-dimensional input vector.
 
 #figure(
   image("figures/random_episode.png", width: 100%),
   caption: [Visualization of a random episode],
 )<fig:random_episode>
 
-Depending on the learning algorithm, the data is processed in two different ways regarding the model architecture.
+Depending on the learning algorithm, the data is processed in two different ways according to the model architecture.
 
 === Flat Formatting
 
@@ -185,7 +185,7 @@ Where $E$ is the number of episodes and $T$ is the number of timesteps per episo
 
 == Data Preprocessing
 
-Our goal is to develop a robust and reliable controller which can handle uncertainties and disturbances in the system. For this purpose, we introduce small gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise helps to simulate real-world conditions, such as sensor noise, actuator noise, and environmental disturbances. Given that the data generation pipeline can produce an arbitrary number of samples, a large dataset was collected for training our neural network. Therefore, for the training process we can increase the number of samples until we reach a plateau in the validation loss or a computational limit. For the splitting of the dataset, we use a 80/20 split, where 80% of the data is used for training and 20% for the validation.
+Our goal is to develop a robust and reliable controller that can handle uncertainties and disturbances in the system. To this end, we introduce small Gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise simulates real-world conditions such as sensor noise, actuator noise, and environmental disturbances. Because the data generation pipeline can produce an arbitrary number of samples, we collect a large dataset for training and increase the number of samples until the validation loss plateaus or computational limits are reached. We use an 80/20 split, where 80% of the data is used for training and 20% for validation.
 
 = Neural Network Architecture
 
@@ -231,7 +231,7 @@ If time permits, we will investigate a Transformer model. Unlike RNNs, the multi
 We evaluate the learned policies using a combination of offline and online metrics:
 
 == Offline Metrics
-We used Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
+We use Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
 
 $
   "MAE"_j = 1/N sum_(i=0)^n abs(tau_"MPC,i,j" - pi_theta (X_i)_j)
@@ -239,12 +239,12 @@ $
 $
   "RMSE"_j = 1/N sum_(i=0)^n norm(tau_"MPC,i,j" - pi_theta (X_i)_j)^2_2
 $
- We can also evaluate the percentage of predictions where the sign of each torque component matches the expert's using Direction Accuracy (DA). This assesses whether the model correctly identifies the direction of joint acceleration.
+ We also evaluate the percentage of predictions where the sign of each torque component matches the expert's using Direction Accuracy (DA). This assesses whether the model correctly identifies the direction of joint acceleration.
 $
   "DA" = 1/(3N) sum_(i=0)^N sum_(j=1)^3 II ("sign"(tau_"MPC,i,j") = "sign"(pi_theta (X_i)_j))
 $
 
-Finally, we measure the proportion of variance in the expert's action that is explained by our model, using explained variance. It's a normalized, scale-invariant metric for comparing performance defined as follows:
+Finally, we measure the proportion of variance in the expert's action that is explained by our model, using explained variance. It is a normalized, scale-invariant metric for comparing performance defined as follows:
 $
   "Explained Variance" = 1 - "Var"(tau_"MPC" - pi_theta(X))/"Var"(tau_"MPC")
 $
