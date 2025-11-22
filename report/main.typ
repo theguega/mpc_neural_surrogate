@@ -289,7 +289,7 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
       [*MSE/Torque*]
     ),
 
-    model_col("Linear Regression"), $8.729 plus.minus 0.098$, $1.418 plus.minus 0.009$, [0.221], [0.681], vector_val("4.24, 5.54, 16.41"),
+    model_col("Ridge"), $8.729 plus.minus 0.098$, $1.418 plus.minus 0.009$, [0.221], [0.681], vector_val("4.24, 5.54, 16.41"),
     model_col("Random Forest"), $0.097 plus.minus 0.003$, $0.111 plus.minus 0.002$, [0.991], [0.999], vector_val("0.05, 0.08, 0.16"),
     model_col("MLP Regressor"), $0.053 plus.minus 0.013$, $0.094 plus.minus 0.009$, [0.994], [0.938], vector_val("0.05, 0.03, 0.07"),
     model_col("Gradient Boosting"), $1.017 plus.minus 0.059$, $0.243 plus.minus 0.005$, [0.843], [0.996], vector_val("2.30, 0.10, 0.65"),

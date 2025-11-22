@@ -6,12 +6,13 @@ from datetime import datetime
 import h5py
 import numpy as np
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import Ridge
 from sklearn.metrics import explained_variance_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
+from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 
@@ -98,7 +99,7 @@ def main():
         Y = Y[:10000]
 
     models_def = {
-        "Linear Regression": lambda: LinearRegression(),
+        "Linear Regression": lambda: Ridge(),
         "Random Forest": lambda: RandomForestRegressor(n_estimators=50, n_jobs=-1, max_depth=10),
         "MLP Regressor": lambda: MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=500),
         "Gradient Boosting": lambda: MultiOutputRegressor(GradientBoostingRegressor(n_estimators=100)),
@@ -125,6 +126,10 @@ def main():
         # trials loop
         for i in tqdm(range(n_trials), desc=f"Trials ({name})", leave=False):
             X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42 + i, shuffle=True)
+
+            scaler = StandardScaler()
+            X_train = scaler.fit_transform(X_train)
+            X_test = scaler.transform(X_test)
 
             model = model_factory()
             metrics = evaluate_model(model, X_train, X_test, y_train, y_test)
