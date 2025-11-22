@@ -3,7 +3,7 @@
         "MSE": 0.27213556697990104,
         "MAE": 0.08890598320461685,
         "Explained Variance": 0.9718766370077673,
-        "Direction Accuracy": 0.9974435510276952,
+        "Direction Accuracy": 0.998620662858919,
         "MSE per Torque": [
             0.23582210251908198,
             0.12702110797100094,
@@ -16,13 +16,13 @@
         ],
         "trial": 0,
         "model": "KNN Regressor",
-        "timestamp": "2025-11-20T17:57:16.450264"
+        "timestamp": "2025-11-22T17:36:54.103279"
     },
     {
         "MSE": 0.2672129434391656,
         "MAE": 0.09169700877572835,
         "Explained Variance": 0.972657393086322,
-        "Direction Accuracy": 0.997280647371616,
+        "Direction Accuracy": 0.9986595174262735,
         "MSE per Torque": [
             0.2392530073294244,
             0.11983571357187248,
@@ -35,13 +35,13 @@
         ],
         "trial": 1,
         "model": "KNN Regressor",
-        "timestamp": "2025-11-20T17:57:16.706060"
+        "timestamp": "2025-11-22T17:36:54.370859"
     },
     {
         "MSE": 0.21180514975498865,
         "MAE": 0.08920412804217469,
         "Explained Variance": 0.9789351856513692,
-        "Direction Accuracy": 0.9977816931181098,
+        "Direction Accuracy": 0.9987177992773051,
         "MSE per Torque": [
             0.1739463577920779,
             0.0879199043660788,
@@ -54,13 +54,13 @@
         ],
         "trial": 2,
         "model": "KNN Regressor",
-        "timestamp": "2025-11-20T17:57:16.962888"
+        "timestamp": "2025-11-22T17:36:54.628105"
     },
     {
         "MSE": 0.16223359115314614,
         "MAE": 0.0909601313267568,
         "Explained Variance": 0.9851408763171728,
-        "Direction Accuracy": 0.997949764848414,
+        "Direction Accuracy": 0.9989314993977542,
         "MSE per Torque": [
             0.10639536302637083,
             0.08237318593695063,
@@ -73,13 +73,13 @@
         ],
         "trial": 3,
         "model": "KNN Regressor",
-        "timestamp": "2025-11-20T17:57:17.208450"
+        "timestamp": "2025-11-22T17:36:54.892095"
     },
     {
         "MSE": 0.27044259821562,
         "MAE": 0.09375633968277447,
         "Explained Variance": 0.9727976095290297,
-        "Direction Accuracy": 0.9975679658871844,
+        "Direction Accuracy": 0.9987955084120138,
         "MSE per Torque": [
             0.22805878688881942,
             0.1374605946494013,
@@ -92,6 +92,6 @@
         ],
         "trial": 4,
         "model": "KNN Regressor",
-        "timestamp": "2025-11-20T17:57:17.456984"
+        "timestamp": "2025-11-22T17:36:55.216971"
     }
 ]

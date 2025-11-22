@@ -1,4 +1,3 @@
-import argparse
 import glob
 import json
 import os
@@ -54,7 +53,7 @@ def plot_metrics(df, output_dir):
     plt.savefig(os.path.join(output_dir, "accuracy_variance_comparison.png"))
     plt.close()
 
-    # Per-Torque MSE (Grouped Bar Chart)
+    # per-torque MSE
     torque_data = []
     for _, row in df.iterrows():
         mse_torques = row["MSE per Torque"]
@@ -73,17 +72,11 @@ def plot_metrics(df, output_dir):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--results_dir", type=str, default="results", help="Directory containing JSON result files")
-    parser.add_argument("--output_dir", type=str, default="results/plots", help="Directory to save plots")
-    args = parser.parse_args()
-
-    if not os.path.exists(args.results_dir):
-        print(f"Error: Results directory '{args.results_dir}' does not exist.")
+    if not os.path.exists("results"):
+        print("Error: Results directory does not exist.")
         return
 
-    print(f"Loading results from {args.results_dir}...")
-    df = load_results(args.results_dir)
+    df = load_results("results")
 
     if df.empty:
         print("No data found.")
@@ -91,10 +84,9 @@ def main():
 
     print(f"Found {len(df)} entries from models: {df['model'].unique()}")
 
-    os.makedirs(args.output_dir, exist_ok=True)
-    print(f"Generating plots in {args.output_dir}...")
+    print("Generating plots...")
 
-    plot_metrics(df, args.output_dir)
+    plot_metrics(df, "results/plots/")
     print("Done.")
 
 

@@ -289,16 +289,16 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
       [*MSE/Torque*]
     ),
 
-    model_col("Linear Regression"), $8.729 plus.minus 0.098$, $1.418 plus.minus 0.009$, [0.221], [0.443], vector_val("4.24, 5.54, 16.41"),
-    model_col("Random Forest"), $0.097 plus.minus 0.003$, $0.111 plus.minus 0.002$, [0.991], [0.993], vector_val("0.05, 0.08, 0.16"),
-    model_col("MLP Regressor"), $0.053 plus.minus 0.013$, $0.094 plus.minus 0.009$, [0.994], [0.951], vector_val("0.05, 0.03, 0.07"),
-    model_col("Gradient Boosting"), $1.017 plus.minus 0.059$, $0.243 plus.minus 0.005$, [0.843], [0.982], vector_val("2.30, 0.10, 0.65"),
-    model_col("KNN Regressor"), $0.237 plus.minus 0.038$, $0.091 plus.minus 0.002$, [0.976], [0.998], vector_val("0.20, 0.11, 0.40"),
+    model_col("Linear Regression"), $8.729 plus.minus 0.098$, $1.418 plus.minus 0.009$, [0.221], [0.681], vector_val("4.24, 5.54, 16.41"),
+    model_col("Random Forest"), $0.097 plus.minus 0.003$, $0.111 plus.minus 0.002$, [0.991], [0.999], vector_val("0.05, 0.08, 0.16"),
+    model_col("MLP Regressor"), $0.053 plus.minus 0.013$, $0.094 plus.minus 0.009$, [0.994], [0.938], vector_val("0.05, 0.03, 0.07"),
+    model_col("Gradient Boosting"), $1.017 plus.minus 0.059$, $0.243 plus.minus 0.005$, [0.843], [0.996], vector_val("2.30, 0.10, 0.65"),
+    model_col("KNN Regressor"), $0.237 plus.minus 0.038$, $0.091 plus.minus 0.002$, [0.976], [0.999], vector_val("0.20, 0.11, 0.40"),
   ),
   caption: [Comparison of regression algorithms on the validation set (averaged over 5 runs).]
 )<regression_baseline>
 
-The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship ($R^2 approx 0.22$), exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$) @regression_baseline, indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN achieved the highest Directional Accuracy ($99.8%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Consequently, the MLP Regressor is selected as the primary candidate for the following experiments.
+The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship ($R^2 approx 0.22$), exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$) @regression_baseline, indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Consequently, the MLP Regressor is selected as the primary candidate for the following experiments.
 
 #figure(
   image("figures/mse_per_torque.png", width: 90%),

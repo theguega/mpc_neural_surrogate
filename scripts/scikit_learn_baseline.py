@@ -45,23 +45,9 @@ def load_data(filepath):
 
 def compute_direction_accuracy(y_true, y_pred):
     """
-    Cosine similarity between predicted and true torque vectors
-    Returns mean cosine similarity
-    # y_true: (N, 3), y_pred: (N, 3)
+    Sum the number of time the sign of the predicted torque matches the true torque.
     """
-
-    norm_true = np.linalg.norm(y_true, axis=1, keepdims=True)
-    norm_pred = np.linalg.norm(y_pred, axis=1, keepdims=True)
-
-    norm_true[norm_true == 0] = 1e-8
-    norm_pred[norm_pred == 0] = 1e-8
-
-    y_true_norm = y_true / norm_true
-    y_pred_norm = y_pred / norm_pred
-
-    # dot product of normalized vectors is cosine similarity
-    cos_sim = np.sum(y_true_norm * y_pred_norm, axis=1)
-    return np.mean(cos_sim)
+    return np.sum(np.sign(y_true) == np.sign(y_pred)) / (3 * len(y_true))
 
 
 def evaluate_model(model, X_train, X_test, y_train, y_test):
@@ -95,7 +81,7 @@ def main():
         "--model",
         type=str,
         default="all",
-        help="Model to run (or 'all'). Options: 'Linear Regression', 'Random Forest', 'MLP Regressor', 'Gradient Boosting', 'KNN Regressor'",
+        help="Model to run (or 'all'). Options: 'Linear Regression', 'Random Forest', 'MLP Regressor', 'Gradient Boosting', 'KNN Regressor', 'SVR'",
     )
     parser.add_argument("--input_file", type=str, default="data/robot_mpc_dataset.h5", help="Path to input file")
     parser.add_argument("--output_dir", type=str, default="results", help="Directory to save results")
@@ -107,9 +93,9 @@ def main():
     print(f"Data loaded. X shape: {X.shape}, Y shape: {Y.shape}")
 
     if args.test:
-        print("TEST MODE: Using only 1000 samples.")
-        X = X[:1000]
-        Y = Y[:1000]
+        print("TEST MODE: Using only 10000 samples.")
+        X = X[:10000]
+        Y = Y[:10000]
 
     models_def = {
         "Linear Regression": lambda: LinearRegression(),
@@ -117,6 +103,7 @@ def main():
         "MLP Regressor": lambda: MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=500),
         "Gradient Boosting": lambda: MultiOutputRegressor(GradientBoostingRegressor(n_estimators=100)),
         "KNN Regressor": lambda: KNeighborsRegressor(n_neighbors=5),
+        # "SVR": lambda: MultiOutputRegressor(SVR()), doesn't scale with more than 10 000 samples
     }
 
     if args.model != "all":

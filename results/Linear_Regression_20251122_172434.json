@@ -3,7 +3,7 @@
         "MSE": 8.603835130863205,
         "MAE": 1.4063869431699025,
         "Explained Variance": 0.2186454171056504,
-        "Direction Accuracy": 0.43783096652106424,
+        "Direction Accuracy": 0.6801686288223181,
         "MSE per Torque": [
             4.168268854968193,
             5.5288739585954305,
@@ -16,13 +16,13 @@
         ],
         "trial": 0,
         "model": "Linear Regression",
-        "timestamp": "2025-11-20T17:46:10.066313"
+        "timestamp": "2025-11-22T17:24:34.814873"
     },
     {
         "MSE": 8.703180468154287,
         "MAE": 1.4180092297959426,
         "Explained Variance": 0.22189251901011764,
-        "Direction Accuracy": 0.438958414386135,
+        "Direction Accuracy": 0.6776236546606054,
         "MSE per Torque": [
             4.296933517539413,
             5.319577039160966,
@@ -35,13 +35,13 @@
         ],
         "trial": 1,
         "model": "Linear Regression",
-        "timestamp": "2025-11-20T17:46:10.099488"
+        "timestamp": "2025-11-22T17:24:34.846757"
     },
     {
         "MSE": 8.626423094909738,
         "MAE": 1.4063087529859188,
         "Explained Variance": 0.21844431306169076,
-        "Direction Accuracy": 0.44509141580506334,
+        "Direction Accuracy": 0.6837238217352449,
         "MSE per Torque": [
             4.2044604645087365,
             5.499342226716461,
@@ -54,13 +54,13 @@
         ],
         "trial": 2,
         "model": "Linear Regression",
-        "timestamp": "2025-11-20T17:46:10.131854"
+        "timestamp": "2025-11-22T17:24:34.878419"
     },
     {
         "MSE": 8.901630244189903,
         "MAE": 1.4304906335079959,
         "Explained Variance": 0.22517592670420758,
-        "Direction Accuracy": 0.44677505456211547,
+        "Direction Accuracy": 0.6823056300268097,
         "MSE per Torque": [
             4.23199929435209,
             5.6516579416636255,
@@ -73,13 +73,13 @@
         ],
         "trial": 3,
         "model": "Linear Regression",
-        "timestamp": "2025-11-20T17:46:10.163235"
+        "timestamp": "2025-11-22T17:24:34.907897"
     },
     {
         "MSE": 8.808462661036723,
         "MAE": 1.427752860789247,
         "Explained Variance": 0.2213293351181103,
-        "Direction Accuracy": 0.4442408523670711,
+        "Direction Accuracy": 0.6831215759412519,
         "MSE per Torque": [
             4.289174007157307,
             5.682658516822038,
@@ -92,6 +92,6 @@
         ],
         "trial": 4,
         "model": "Linear Regression",
-        "timestamp": "2025-11-20T17:46:10.195663"
+        "timestamp": "2025-11-22T17:24:34.937752"
     }
 ]
