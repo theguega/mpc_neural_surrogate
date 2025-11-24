@@ -265,15 +265,15 @@ $
 
 == Regression Baseline
 
-For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. The dataset consists of 1715 episodes, which were flattened to remove temporal dependencies, resulting in a total of $N = 85,789$ samples. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. Table 1 summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy.
+For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. The dataset consists of 1715 episodes, which were flattened to remove temporal dependencies, resulting in a total of $N = 85,789$ samples. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. Table 1 summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
 
 #let model_col(name) = strong(name)
-#let vector_val(v) = text(size: 0.8em, $mono([#v])$)
+#let vector_val(v) = text(size: 0.7em, $mono([#v])$)
 
 #figure(
   table(
     columns: (auto, auto, auto, auto, auto, auto),
-    inset: 8pt,
+    inset: 5pt,
     align: (col, row) => (if col == 0 { left } else { center + horizon }),
     stroke: (x, y) => (
       top: if y == 0 { 1pt } else if y == 1 { 0.5pt } else { 0pt },
@@ -298,14 +298,15 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
   caption: [Comparison of regression algorithms on the validation set (averaged over 5 runs).]
 )<regression_baseline>
 
-The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship ($R^2 approx 0.22$), exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$) @regression_baseline, indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Consequently, the MLP Regressor is selected as the primary candidate for the following experiments.
+The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$) @regression_baseline, indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Consequently, the MLP Regressor is selected as the primary candidate for the following experiments.
 
 #figure(
   image("figures/mse_per_torque.png", width: 90%),
-  caption: [Mean Squared Error per Torque Dimension],
+  caption: [Mean Squared Error per Torque],
 )<fig:mse_per_torque>
 
-== Offline evaluation
+== Custom MLP
+== Time Series Models
 == Online evaluation (MuJoCo)
 
 = Future Work

@@ -12,7 +12,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 
 
@@ -126,10 +125,6 @@ def main():
         # trials loop
         for i in tqdm(range(n_trials), desc=f"Trials ({name})", leave=False):
             X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42 + i, shuffle=True)
-
-            scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
 
             model = model_factory()
             metrics = evaluate_model(model, X_train, X_test, y_train, y_test)
