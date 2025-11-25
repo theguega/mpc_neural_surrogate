@@ -1,0 +1,78 @@
+{
+    "controller_type": "sklearn",
+    "model_path": "models/trained/mlp_20251125_045459.pkl",
+    "num_episodes": 2,
+    "max_steps": 100,
+    "tolerance": 0.02,
+    "timestamp": "2025-11-25T04:55:12.022802",
+    "aggregate_metrics": {
+        "success_rate": 0.0,
+        "mean_steps_to_target": null,
+        "mean_final_ee_error": 0.6071868545377594,
+        "std_final_ee_error": 0.18562352079503558,
+        "mean_tracking_error": 0.6159995614605794,
+        "std_tracking_error": 0.14974701515380184,
+        "mean_control_effort": 59.415907444108356,
+        "std_control_effort": 18.653434957164425,
+        "mean_solve_time": 0.00017656564712524413,
+        "std_solve_time": 4.560947418212891e-05
+    },
+    "episode_metrics": [
+        {
+            "reached_target": false,
+            "steps_to_target": 100,
+            "final_ee_error": 0.792810375332795,
+            "final_joint_error": 4.220951611203337,
+            "mean_ee_error": 0.7657465766143813,
+            "std_ee_error": 0.0346894869776506,
+            "max_ee_error": 0.7934231621525416,
+            "mean_joint_error": 3.688889928203291,
+            "std_joint_error": 0.9684431535064263,
+            "mean_control_effort": 40.76247248694393,
+            "std_control_effort": 2.8732306137114407,
+            "total_control_effort": 4076.2472486943925,
+            "mean_solve_time": 0.00022217512130737305,
+            "std_solve_time": 0.00041457532068128945,
+            "total_time": 0.022217512130737305,
+            "episode": 0,
+            "target_pos": [
+                -0.450183952461055,
+                0.36057144512793293,
+                0.5195981825434215
+            ],
+            "target_joints": [
+                -0.6753153525934961,
+                -1.3663394691857966,
+                -7.869348678110984e-17
+            ]
+        },
+        {
+            "reached_target": false,
+            "steps_to_target": 100,
+            "final_ee_error": 0.4215633337427238,
+            "final_joint_error": 6.216982098185908,
+            "mean_ee_error": 0.4662525463067776,
+            "std_ee_error": 0.11503095087746165,
+            "max_ee_error": 0.771280988181052,
+            "mean_joint_error": 5.688390996873843,
+            "std_joint_error": 1.0051913972328455,
+            "mean_control_effort": 78.06934240127278,
+            "std_control_effort": 4.199496133431398,
+            "total_control_effort": 7806.934240127278,
+            "mean_solve_time": 0.00013095617294311523,
+            "std_solve_time": 0.00038159608216790475,
+            "total_time": 0.013095617294311523,
+            "episode": 1,
+            "target_pos": [
+                -0.36053660632118534,
+                -0.2751850876460508,
+                0.3467983561008608
+            ],
+            "target_joints": [
+                0.6519369969502371,
+                -2.2203809059906523,
+                1.1882799955687136
+            ]
+        }
+    ]
+}
