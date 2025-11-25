@@ -1,6 +1,7 @@
 #import "@preview/charged-ieee:0.1.4": ieee
 
 #set page(numbering: "1")
+#show cite: set text(blue)
 
 #show: ieee.with(
   title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators],
@@ -152,7 +153,7 @@ After generation, the dataset is stored in an episode-based format within a HDF5
       - ...
   ],
   caption: [Hierarchical HDF5 dataset structure],
-)<dataset-structure>
+)<fig:dataset-structure>
 
 This hierarchical format preserves the temporal integrity of each trial, allowing us to process the data differently depending on the model architecture. The raw data is loaded via a custom MPCDataset class, which constructs the input feature vector $x$ by concatenating the state ($RR^6$) and the target ($RR^3$), resulting in a 9-dimensional input vector.
 
@@ -265,7 +266,7 @@ $
 
 == Regression Baseline
 
-For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. The dataset consists of 1715 episodes, which were flattened to remove temporal dependencies, resulting in a total of $N = 85,789$ samples. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. Table 1 summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
+For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. The dataset consists of 1715 episodes, which were flattened to remove temporal dependencies, resulting in a total of $N = 85,789$ samples. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
 
 #let model_col(name) = strong(name)
 #let vector_val(v) = text(size: 0.7em, $mono([#v])$)
@@ -296,9 +297,10 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
     model_col("KNN Regressor"), $0.237 plus.minus 0.038$, $0.091 plus.minus 0.002$, [0.976], [0.999], vector_val("0.20, 0.11, 0.40"),
   ),
   caption: [Comparison of regression algorithms on the validation set (averaged over 5 runs).]
-)<regression_baseline>
+)<table:regression_baseline>
 
-The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$) @regression_baseline, indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Consequently, the MLP Regressor is selected as the primary candidate for the following experiments.
+The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
+
 
 #figure(
   image("figures/mse_per_torque.png", width: 90%),
@@ -309,13 +311,13 @@ The results highlight the inherent non-linearity of the inverse dynamics mapping
 == Time Series Models
 == Online evaluation (MuJoCo)
 
+#pagebreak()
+
 = Future Work
 
 This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling more complex dynamics.
 
 From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning @deAPorto2025 may prove to be an efficient alternative to learn the underlying MPC cost function.
-
-#pagebreak()
 
 = Acknowledgments
 
