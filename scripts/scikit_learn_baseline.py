@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import pickle
 from datetime import datetime
 
 import h5py
@@ -118,9 +119,14 @@ def main():
 
     print(f"\nRunning evaluation with {n_trials} trials per model...")
 
+    # Create output directory for models if it doesn't exist
+    models_dir = os.path.join(args.output_dir, "models")
+    os.makedirs(models_dir, exist_ok=True)
+
     # models loop
     for name, model_factory in tqdm(models_def.items(), desc="Models"):
         trial_metrics = []
+        trained_models = []  # Store trained models for export
 
         # trials loop
         for i in tqdm(range(n_trials), desc=f"Trials ({name})", leave=False):
@@ -134,11 +140,19 @@ def main():
             metrics["timestamp"] = datetime.now().isoformat()
 
             trial_metrics.append(metrics)
+            trained_models.append(model)  # Save the trained model
 
         results_agg[name] = trial_metrics
 
-        # export results
+        # Export trained models as pickle files
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        for i, model in enumerate(trained_models):
+            model_filename = f"{name.replace(' ', '_')}_trial{i}_{timestamp_str}.pkl"
+            model_filepath = os.path.join(models_dir, model_filename)
+            with open(model_filepath, "wb") as f:
+                pickle.dump(model, f)
+
+        # export results
         filename = f"{name.replace(' ', '_')}_{timestamp_str}.json"
         filepath = os.path.join(args.output_dir, filename)
 
