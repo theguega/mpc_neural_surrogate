@@ -280,7 +280,6 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
       top: if y == 0 { 1pt } else if y == 1 { 0.5pt } else { 0pt },
       bottom: 1pt,
     ),
-
     table.header(
       [*Model*],
       [*MSE* \ (Mean $plus.minus$ CI)],
@@ -300,7 +299,6 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
 )<table:regression_baseline>
 
 The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
-
 
 #figure(
   image("figures/mse_per_torque.png", width: 90%),
