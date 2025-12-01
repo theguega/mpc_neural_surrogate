@@ -1,6 +1,5 @@
 import mujoco
 import numpy as np
-
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
 

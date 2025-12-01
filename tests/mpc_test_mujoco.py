@@ -3,7 +3,6 @@ import time
 import mujoco
 import mujoco.viewer
 import numpy as np
-
 from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
