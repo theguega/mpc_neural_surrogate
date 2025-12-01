@@ -5,6 +5,7 @@ import h5py
 import mujoco
 import mujoco.viewer
 import numpy as np
+
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 
 DEBUG = False

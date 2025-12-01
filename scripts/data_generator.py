@@ -2,10 +2,11 @@ import argparse
 
 import h5py
 import numpy as np
+from tqdm import tqdm
+
 from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
-from tqdm import tqdm
 
 TOL = 0.02  # 2cm tolerance
 
