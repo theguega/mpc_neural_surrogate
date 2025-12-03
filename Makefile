@@ -1,9 +1,9 @@
 .PHONY: all clean
 
-all: report/main.pdf
+all: docs/main.pdf
 
-report/main.pdf: report/main.typ
+docs/main.pdf: docs/main.typ
 	typst compile $< $@
 
 clean:
-	rm -f report/main.pdf
+	rm -f docs/main.pdf

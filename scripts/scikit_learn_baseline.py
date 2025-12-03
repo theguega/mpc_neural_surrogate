@@ -13,6 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.neural_network import MLPRegressor
+from sklearn.svm import SVR
 from tqdm import tqdm
 
 
@@ -85,7 +86,7 @@ def main():
         help="Model to run (or 'all'). Options: 'Linear Regression', 'Random Forest', 'MLP Regressor', 'Gradient Boosting', 'KNN Regressor', 'SVR'",
     )
     parser.add_argument("--input_file", type=str, default="data/robot_mpc_dataset.h5", help="Path to input file")
-    parser.add_argument("--output_dir", type=str, default="results", help="Directory to save results")
+    parser.add_argument("--output_dir", type=str, default="results/scikit_learn_baseline/", help="Directory to save results")
     args = parser.parse_args()
 
     print(f"Loading data from {args.input_file}...")
@@ -93,18 +94,19 @@ def main():
 
     print(f"Data loaded. X shape: {X.shape}, Y shape: {Y.shape}")
 
-    if args.test:
-        print("TEST MODE: Using only 10000 samples.")
-        X = X[:10000]
-        Y = Y[:10000]
+    # during scaling experiment, we found out there is no real improvement after 35000 samples
+    X = X[:35000]
+    Y = Y[:35000]
+
+    print(f"Data used. X shape: {X.shape}, Y shape: {Y.shape}")
 
     models_def = {
         "Linear Regression": lambda: Ridge(),
         "Random Forest": lambda: RandomForestRegressor(n_estimators=50, n_jobs=-1, max_depth=10),
-        "MLP Regressor": lambda: MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=500),
+        "MLP Regressor": lambda: MLPRegressor(hidden_layer_sizes=(128, 64), max_iter=1000),
         "Gradient Boosting": lambda: MultiOutputRegressor(GradientBoostingRegressor(n_estimators=100)),
         "KNN Regressor": lambda: KNeighborsRegressor(n_neighbors=5),
-        # "SVR": lambda: MultiOutputRegressor(SVR()), doesn't scale with more than 10 000 samples
+        "SVR": lambda: MultiOutputRegressor(SVR()),
     }
 
     if args.model != "all":
@@ -184,7 +186,6 @@ def main():
 
         mse_torques = np.array([m["MSE per Torque"] for m in metrics_list])
 
-        # Compute Mean and 95% CI (1.96 * std / sqrt(n))
         def get_stats(data):
             mean = np.mean(data)
             ci = 1.96 * np.std(data) / np.sqrt(len(data))
