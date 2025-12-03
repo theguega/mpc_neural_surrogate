@@ -72,11 +72,11 @@ def plot_metrics(df, output_dir):
 
 
 def main():
-    if not os.path.exists("results"):
+    if not os.path.exists("results/scikit_learn_baseline"):
         print("Error: Results directory does not exist.")
         return
 
-    df = load_results("results")
+    df = load_results("results/scikit_learn_baseline")
 
     if df.empty:
         print("No data found.")
@@ -86,7 +86,7 @@ def main():
 
     print("Generating plots...")
 
-    plot_metrics(df, "results/plots/")
+    plot_metrics(df, "results/scikit_learn_baseline/plots/")
     print("Done.")
 
 

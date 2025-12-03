@@ -186,7 +186,16 @@ Where $E$ is the number of episodes and $T$ is the number of timesteps per episo
 
 == Data Preprocessing
 
-Our goal is to develop a robust and reliable controller that can handle uncertainties and disturbances in the system. To this end, we introduce small Gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise simulates real-world conditions such as sensor noise, actuator noise, and environmental disturbances. Because the data generation pipeline can produce an arbitrary number of samples, we collect a large dataset for training and increase the number of samples until the validation loss plateaus or computational limits are reached. We use an 80/20 split, where 80% of the data is used for training and 20% for validation.
+Our goal is to develop a robust and reliable controller that can handle uncertainties and disturbances in the system. To this end, we introduce small Gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise simulates real-world conditions such as sensor noise, actuator noise, and environmental disturbances. Because the data generation pipeline can produce an arbitrary number of samples, we collect a large dataset for training and increase the number of samples until the validation loss plateaus or computational limits are reached.
+
+For this purpose we ran a simple experiment with both SVR and MLP models from `Scikit-learn` and compared their performance while increasing the number of samples progressively.
+
+#figure(
+  image("figures/dataset_scale_plot.png", width: 90%),
+  caption: [MSE vs number of samples (5 trials per model)],
+)<fig:dataset_scale_plot>
+
+Our experiment showed a clear plateau after 30000 samples @fig:dataset_scale_plot, therefore we decided to use only 35000 samples for the training of our regression algorithms. However, we also observed that RNN models such as GRU were taking full benefits of the full dataset by improving significantly compared to MLP models even after 30000 samples. That's why we decided to train regression models with a limitation of 35000 samples and the RNN models with the total 185000 samples collected.
 
 = Neural Network Architecture
 
@@ -233,6 +242,34 @@ We evaluated the learned policies using a combination of offline and online metr
 
 == Offline Metrics
 We used Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
+
+Comparison off learning with MAE as Loss and MSE as Loss
+
+#table(
+  columns: (1.5fr, 1.5fr, 1.5fr),
+  align: center + horizon,
+  table.header(
+    [#strong[Model Config]],
+    [#strong[MSE (Mean $plus.minus$ Std)]],
+    [#strong[MAE (Mean $plus.minus$ Std)]],
+  ),
+  // MLP_mse
+  [MLP_mse],
+  [$0.1460 plus.minus 0.0522$],
+  [$0.1474 plus.minus 0.0126$],
+  // MLP_mae
+  [MLP_mae],
+  [$0.2017 plus.minus 0.0455$],
+  [$0.0892 plus.minus 0.0078$],
+  // GRU_mse
+  [GRU_mse],
+  [$1.1442 plus.minus 0.1441$],
+  [$0.2581 plus.minus 0.0138$],
+  // GRU_mae
+  [GRU_mae],
+  [$2.1821 plus.minus 0.1001$],
+  [$0.3570 plus.minus 0.0101$],
+)
 
 $
   "MAE"_j = 1/N sum_(i=0)^n abs(tau_"MPC,i,j" - pi_theta (X_i)_j)
@@ -301,7 +338,7 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
 The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
 
 #figure(
-  image("figures/mse_per_torque.png", width: 90%),
+  image("figures/mse_per_torque_without_linear.png", width: 90%),
   caption: [Mean Squared Error per Torque],
 )<fig:mse_per_torque>
 
