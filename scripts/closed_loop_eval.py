@@ -27,8 +27,10 @@ import numpy as np
 import psutil
 from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
+from mpc_surrogate.utils import solve_inverse_kinematics
+from data_generator import sample_3d_cartesian_target
 
-# PyTorch model architecture (matches notebook MLP)
+# PyTorch model architectures
 try:
     import torch
     import torch.nn as nn
@@ -54,6 +56,22 @@ try:
         
         def forward(self, x):
             return self.network(x)
+    
+    class GRU(nn.Module):
+        """GRU-based recurrent neural network for sequence-to-sequence prediction"""
+        def __init__(self, input_dim=9, hidden_dim=128, num_layers=2, output_dim=3):
+            super(GRU, self).__init__()
+            self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
+            self.fc = nn.Linear(hidden_dim, output_dim)
+        
+        def forward(self, x):
+            # GRU expects (batch, seq_len, features)
+            if x.dim() == 2:  # If input is (batch, features), add sequence dimension
+                x = x.unsqueeze(1)
+            gru_out, _ = self.gru(x)
+            # Use last output for prediction
+            out = self.fc(gru_out[:, -1, :])
+            return out
 except ImportError:
     pass  # PyTorch not available, only sklearn will work
 
@@ -81,11 +99,98 @@ def load_model(model_path, model_type):
             model = loaded_obj
             print("Loaded full PyTorch model")
         elif isinstance(loaded_obj, dict):
-            # State dict was saved - instantiate MLP and load weights
-            print("Detected state_dict, instantiating MLP architecture...")
-            model = MLP(input_dim=9, hidden_dims=[128, 64], output_dim=3)
+            # State dict was saved - detect architecture from filename
+            filename = os.path.basename(model_path).lower()
+            print(f"Detected state_dict, detecting architecture from filename...")
+            
+            # Detect architecture based on filename
+            if 'gru' in filename:
+                print("Instantiating GRU architecture...")
+                # Detect number of GRU layers from state dict keys
+                num_layers = 0
+                hidden_dim = 128  # default
+                for key in loaded_obj.keys():
+                    if key.startswith('gru.weight_ih_l'):
+                        layer_idx = int(key.split('_l')[1])
+                        num_layers = max(num_layers, layer_idx + 1)
+                        # Extract hidden_dim from weight shape
+                        # weight_ih shape is (3*hidden_dim, input_dim) for GRU
+                        weight_shape = loaded_obj[key].shape
+                        hidden_dim = weight_shape[0] // 3
+                num_layers = max(num_layers, 1)  # At least 1 layer
+                print(f"Detected {num_layers} GRU layers with hidden_dim={hidden_dim}")
+                model = GRU(input_dim=9, hidden_dim=hidden_dim, num_layers=num_layers, output_dim=3)
+            elif 'mlp' in filename:
+                print("Instantiating MLP architecture...")
+                # Detect all hidden dimensions from state dict
+                # Look for LINEAR layers only (indices 0, 2, 4, 6, 8 if using BN/Dropout, or 0, 1, 2... if not)
+                hidden_dims = []
+                linear_indices = []
+                try:
+                    for key in loaded_obj.keys():
+                        if key.startswith('network.') and '.weight' in key:
+                            # Extract layer index
+                            idx = int(key.split('.')[1])
+                            if idx not in linear_indices:
+                                linear_indices.append(idx)
+                    
+                    linear_indices = sorted(set(linear_indices))
+                    
+                    # Check if BatchNorm layers are present (even indices would be BN if using BN/ReLU/Dropout pattern)
+                    has_batchnorm = any(f'network.{i}.running_mean' in loaded_obj for i in range(1, 20))
+                    
+                    # If no BN, linear indices are consecutive (0, 1, 2, ...)
+                    # If BN, linear indices skip by 4 (0, 4, 8, ...) or by 2 (0, 2, 4, ...)
+                    if not has_batchnorm:
+                        # Simple linear network: consecutive indices
+                        for idx in linear_indices[:-1]:  # All but the last (output) layer
+                            weight = loaded_obj[f'network.{idx}.weight']
+                            hidden_dims.append(weight.shape[0])
+                    else:
+                        # Network with BN/ReLU/Dropout: indices are 0, 2, 4, 6, 8... (or 0, 4, 8...)
+                        # Hidden dims are the output dims of hidden layers (all but last)
+                        for idx in linear_indices[:-1]:
+                            weight = loaded_obj[f'network.{idx}.weight']
+                            hidden_dims.append(weight.shape[0])
+                    
+                    if not hidden_dims:
+                        hidden_dims = [256, 128, 64, 32]  # fallback default
+                except Exception as e:
+                    print(f"Error detecting hidden dims: {e}")
+                    hidden_dims = [256, 128, 64, 32]  # fallback default
+                
+                print(f"Detected hidden_dims={hidden_dims}, has_batchnorm={has_batchnorm}")
+                
+                # Create MLP WITHOUT batchnorm/dropout if the saved model doesn't have them
+                if has_batchnorm:
+                    model = MLP(input_dim=9, hidden_dims=hidden_dims, output_dim=3)
+                else:
+                    # Create a version without BN and dropout
+                    class SimpleMLP(nn.Module):
+                        def __init__(self, input_dim=9, hidden_dims=[128, 64], output_dim=3):
+                            super(SimpleMLP, self).__init__()
+                            layers = []
+                            prev_dim = input_dim
+                            for hidden_dim in hidden_dims:
+                                layers.extend([
+                                    nn.Linear(prev_dim, hidden_dim),
+                                    nn.ReLU()
+                                ])
+                                prev_dim = hidden_dim
+                            layers.append(nn.Linear(prev_dim, output_dim))
+                            self.network = nn.Sequential(*layers)
+                        
+                        def forward(self, x):
+                            return self.network(x)
+                    
+                    model = SimpleMLP(input_dim=9, hidden_dims=hidden_dims, output_dim=3)
+            else:
+                # Default to MLP if architecture cannot be determined
+                print("Architecture not detected in filename, defaulting to MLP...")
+                model = MLP(input_dim=9, hidden_dims=[128, 64], output_dim=3)
+            
             model.load_state_dict(loaded_obj)
-            print("Loaded state_dict into MLP")
+            print(f"Loaded state_dict")
         else:
             raise ValueError(f"Unknown PyTorch save format. Expected nn.Module or dict, got {type(loaded_obj)}")
         
@@ -130,75 +235,35 @@ def predict_action(model, state, target, model_type):
 
 def list_available_models(models_dir='results/models'):
     """
-    List all available model files in a directory (.pkl, .pt, .pth).
-    
-    Args:
-        models_dir: Directory to search for model files
+    List all available model files:
+    - results/models/ for .pkl (scikit-learn)
+    - results/pytorch_comparison/models/ for .pt/.pth (PyTorch comparisons)
     
     Returns:
         List of tuples (model_name, filepath, model_type)
     """
     import glob
     
-    if not os.path.exists(models_dir):
-        return []
-    
     models = []
     
-    # Find pickle files
-    pkl_files = glob.glob(os.path.join(models_dir, '*.pkl'))
-    models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
+    # Find scikit-learn models in results/models/
+    if os.path.exists(models_dir):
+        pkl_files = glob.glob(os.path.join(models_dir, '*.pkl'))
+        models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
     
-    # Find PyTorch files
-    pt_files = glob.glob(os.path.join(models_dir, '*.pt'))
-    models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pt_files)])
-    
-    pth_files = glob.glob(os.path.join(models_dir, '*.pth'))
-    models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pth_files)])
+    # Find PyTorch models in results/pytorch_comparison/models/
+    pytorch_dir = 'results/pytorch_comparison/models'
+    if os.path.exists(pytorch_dir):
+        pt_files = glob.glob(os.path.join(pytorch_dir, '*.pt'))
+        models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pt_files)])
+        pth_files = glob.glob(os.path.join(pytorch_dir, '*.pth'))
+        models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pth_files)])
     
     return sorted(models)
 
 
-def load_dataset_episodes(dataset_path='data/robot_mpc_dataset.h5', num_episodes=None, seed=42):
-    """
-    Load episodes from the HDF5 dataset.
-    
-    Args:
-        dataset_path: Path to HDF5 dataset
-        num_episodes: Number of episodes to load (None = all)
-        seed: Random seed for episode selection
-    
-    Returns:
-        List of episode data dicts with 'name', 'states', 'targets', 'actions'
-    """
-    np.random.seed(seed)
-    
-    with h5py.File(dataset_path, 'r') as f:
-        episodes = f['episodes']
-        ep_keys = sorted(list(episodes.keys()))
-        
-        # Select episodes
-        if num_episodes is None or num_episodes >= len(ep_keys):
-            selected_keys = ep_keys
-        else:
-            selected_keys = sorted(np.random.choice(ep_keys, size=num_episodes, replace=False))
-        
-        # Load episode data
-        episode_data = []
-        for ep_key in selected_keys:
-            ep = episodes[ep_key]
-            episode_data.append({
-                'name': ep_key,
-                'states': ep['states'][:],
-                'targets': ep['targets'][:],
-                'actions': ep['actions'][:]
-            })
-    
-    return episode_data
-
-
-def run_episode(env, controller, model, model_type, episode_data, 
-                max_steps=None, tolerance=0.2, render=False, viewer=None):
+def run_episode(env, controller, model, model_type, target_xyz, 
+                max_steps=150, tolerance=0.2, render=False, viewer=None):
     """
     Run a single episode where the robot tracks targets from the dataset.
     
@@ -207,8 +272,8 @@ def run_episode(env, controller, model, model_type, episode_data,
         controller: MPCController instance (can be None if using model)
         model: Trained model (can be None if using MPC)
         model_type: 'pytorch', 'sklearn', or 'mpc'
-        episode_data: Dict with 'name', 'states', 'targets', 'actions' from dataset
-        max_steps: Maximum steps per episode (None = use episode length)
+        target_xyz: 3D target position sampled for this test episode
+        max_steps: Maximum steps per episode (default: 150)
         tolerance: Distance threshold to consider target reached
         render: Whether to render the episode
         viewer: MuJoCo viewer instance (if rendering)
@@ -218,16 +283,8 @@ def run_episode(env, controller, model, model_type, episode_data,
     """
     n_sim_steps_per_mpc_step = int(0.05 / env.model.opt.timestep)
     
-    # Get episode length from dataset
-    episode_length = len(episode_data['states'])
-    if max_steps is None:
-        max_steps = episode_length
-    
-    # Reset to starting position (use first state from dataset)
+    # Reset environment
     obs = env.reset()
-    initial_state = episode_data['states'][0]
-    env.data.qpos[:3] = initial_state[:3]
-    env.data.qvel[:3] = initial_state[3:]
     mujoco.mj_forward(env.model, env.data)
     
     # Setup target visualization
@@ -246,20 +303,17 @@ def run_episode(env, controller, model, model_type, episode_data,
     # Get process for CPU tracking
     process = psutil.Process()
     
-    for step in range(min(max_steps, episode_length)):
-        current_state = obs[:6]  # [q, q_dot]
+    # Solve IK to get target joint positions once
+    _, target_joints = solve_inverse_kinematics(env, target_xyz)
+    for step in range(max_steps):
+        current_state = obs[:6]
         current_ee_pos = env.get_ee_position()
-        
-        # Get target from dataset for this timestep
-        target_pos = episode_data['targets'][step]
-        # Use target joints from dataset (MPC's target)
-        target_joints = episode_data['states'][step][:3] if step < episode_length else current_state[:3]
         
         # Update target visualization
         if render and viewer is not None:
-            env.data.mocap_pos[0] = target_pos
+            env.data.mocap_pos[0] = target_xyz
         
-        ee_error = np.linalg.norm(current_ee_pos - target_pos)
+        ee_error = np.linalg.norm(current_ee_pos - target_xyz)
         joint_error = np.linalg.norm(current_state[:3] - target_joints)
         
         ee_errors.append(ee_error)
@@ -285,11 +339,9 @@ def run_episode(env, controller, model, model_type, episode_data,
         control_effort = np.linalg.norm(tau)
         control_efforts.append(control_effort)
         
-        # Compare with MPC action from dataset
-        if step < len(episode_data['actions']):
-            mpc_action = episode_data['actions'][step]
-            action_diff = np.linalg.norm(tau - mpc_action)
-            action_differences.append(action_diff)
+        # If running MPC, action difference is zero baseline; for models, we skip
+        if model_type == 'mpc':
+            action_differences.append(0.0)
         
         # Apply control with gravity compensation
         total_tau = tau + env.data.qfrc_bias
@@ -308,7 +360,7 @@ def run_episode(env, controller, model, model_type, episode_data,
     reached_target = bool(final_ee_error < tolerance)
     
     metrics = {
-        'episode_name': episode_data['name'],
+        'episode_name': 'generated_test_episode',
         'num_steps': len(ee_errors),
         'reached_target': reached_target,
         'final_ee_error': final_ee_error,
@@ -338,17 +390,16 @@ def run_evaluation(args):
     Main evaluation loop: run multiple episodes and aggregate results.
     """
     print("=" * 80)
-    print("Closed-Loop Evaluation (Dataset-based)")
+    print("Closed-Loop Evaluation (Generated Test Episodes)")
     print("=" * 80)
     
     # Initialize environment
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
     print(f"Environment initialized: {env.model.nq} joints")
     
-    # Load episodes from dataset
-    print(f"Loading episodes from: {args.dataset_path}")
-    episodes = load_dataset_episodes(args.dataset_path, args.num_episodes, args.seed)
-    print(f"Loaded {len(episodes)} episodes from dataset")
+    # Generate episodes on-the-fly (test set)
+    total_episodes = args.num_episodes
+    print(f"Preparing to generate {total_episodes} test episodes on-the-fly")
     
     # Load model or controller
     model = None
@@ -369,55 +420,45 @@ def run_evaluation(args):
         print("Rendering enabled")
     
     # Run episodes
-    print(f"\nRunning {len(episodes)} episodes with {model_type} controller...")
+    print(f"\nRunning {total_episodes} episodes with {model_type} controller...")
     print("-" * 80)
     
     all_metrics = []
     
     if args.render:
         with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
-            for ep_idx, episode_data in enumerate(episodes):
-                print(f"\nEpisode {ep_idx + 1}/{len(episodes)} ({episode_data['name']})")
-                
-                # Run episode
+            for ep_idx in range(total_episodes):
+                print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
+                target_xyz = sample_3d_cartesian_target(env)
                 metrics = run_episode(
                     env, controller, model, model_type,
-                    episode_data,
-                    max_steps=args.max_steps,
+                    target_xyz,
+                    max_steps=args.max_steps or 150,
                     tolerance=args.tolerance,
                     render=True,
                     viewer=viewer
                 )
-                
                 metrics['episode'] = ep_idx
                 all_metrics.append(metrics)
-                
-                # Print episode summary
                 print(f"  Steps: {metrics['num_steps']}, "
                       f"Reached: {metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m, tol: {args.tolerance:.3f}m), "
-                      f"Mean EE error: {metrics['mean_ee_error']:.4f}m, "
-                      f"Action diff from MPC: {metrics['mean_action_diff_from_mpc']:.4f}")
+                      f"Mean EE error: {metrics['mean_ee_error']:.4f}m")
     else:
-        for ep_idx, episode_data in enumerate(episodes):
-            print(f"\nEpisode {ep_idx + 1}/{len(episodes)} ({episode_data['name']})")
-            
-            # Run episode
+        for ep_idx in range(total_episodes):
+            print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
+            target_xyz = sample_3d_cartesian_target(env)
             metrics = run_episode(
                 env, controller, model, model_type,
-                episode_data,
-                max_steps=args.max_steps,
+                target_xyz,
+                max_steps=args.max_steps or 150,
                 tolerance=args.tolerance,
                 render=False
             )
-            
             metrics['episode'] = ep_idx
             all_metrics.append(metrics)
-            
-            # Print episode summary
             print(f"  Steps: {metrics['num_steps']}, "
                   f"Reached: {metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m, tol: {args.tolerance:.3f}m), "
-                  f"Mean EE error: {metrics['mean_ee_error']:.4f}m, "
-                  f"Action diff from MPC: {metrics['mean_action_diff_from_mpc']:.4f}")
+                  f"Mean EE error: {metrics['mean_ee_error']:.4f}m")
     
     # Aggregate results
     print("\n" + "=" * 80)
@@ -433,19 +474,22 @@ def run_evaluation(args):
     mean_cpu_percent = np.mean([m['mean_cpu_percent'] for m in all_metrics])
     
     print(f"Episodes Evaluated: {len(all_metrics)}")
-    print(f"Success Rate: {success_rate * 100:.2f}% ({int(success_rate * len(all_metrics))}/{len(all_metrics)} reached target within {args.tolerance:.3f}m tolerance)")
-    print(f"Mean Final EE Error: {mean_final_error:.4f}m")
-    print(f"Mean Tracking Error (Average Position Error): {mean_tracking_error:.4f}m")
-    print(f"Mean Control Effort: {mean_control_effort:.4f}")
-    print(f"Mean Solve Time (Computational Efficiency): {mean_solve_time * 1000:.4f}ms")
-    print(f"Mean Action Difference from MPC: {mean_action_diff:.4f}")
-    print(f"Mean CPU Utilization (Computational Cost): {mean_cpu_percent:.2f}%")
+    if len(all_metrics) > 0:
+        print(f"Success Rate: {success_rate * 100:.2f}% ({int(success_rate * len(all_metrics))}/{len(all_metrics)} reached target within {args.tolerance:.3f}m tolerance)")
+        print(f"Mean Final EE Error: {mean_final_error:.4f}m")
+        print(f"Mean Tracking Error (Average Position Error): {mean_tracking_error:.4f}m")
+        print(f"Mean Control Effort: {mean_control_effort:.4f}")
+        print(f"Mean Solve Time (Computational Efficiency): {mean_solve_time * 1000:.4f}ms")
+        print(f"Mean Action Difference from MPC: {mean_action_diff:.4f}")
+        print(f"Mean CPU Utilization (Computational Cost): {mean_cpu_percent:.2f}%")
+    else:
+        print("No episodes were evaluated.")
     
     # Prepare summary
     summary = {
         'controller_type': model_type,
         'model_path': args.model_path if model_type != 'mpc' else None,
-        'dataset_path': args.dataset_path,
+        'dataset_path': None,
         'num_episodes': len(all_metrics),
         'max_steps': args.max_steps,
         'tolerance': args.tolerance,
@@ -476,6 +520,22 @@ def run_evaluation(args):
     filename = f"closed_loop_{controller_name}_{timestamp_str}.json"
     filepath = os.path.join(args.output_dir, filename)
     
+    # Convert numpy types to Python native types for JSON serialization
+    def convert_to_serializable(obj):
+        """Convert numpy types to Python native types"""
+        if isinstance(obj, dict):
+            return {k: convert_to_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_to_serializable(item) for item in obj]
+        elif isinstance(obj, (np.floating, np.integer)):
+            return float(obj) if isinstance(obj, np.floating) else int(obj)
+        elif isinstance(obj, bool):
+            return bool(obj)
+        else:
+            return obj
+    
+    summary = convert_to_serializable(summary)
+    
     with open(filepath, 'w') as f:
         json.dump(summary, f, indent=4)
     
@@ -504,19 +564,14 @@ def main():
         default=None,
         help="Path to model file. If not specified and not using MPC, auto-selects from results/models/."
     )
-    parser.add_argument(
-        '--dataset-path',
-        type=str,
-        default='data/robot_mpc_dataset.h5',
-        help="Path to HDF5 dataset (default: data/robot_mpc_dataset.h5)"
-    )
+    # Dataset path removed: we generate test episodes on-the-fly
     
     # Episode configuration
     parser.add_argument(
         '--num-episodes',
         type=int,
-        default=None,
-        help="Number of episodes to load from dataset (default: None, loads all episodes)"
+        default=1000,
+        help="Number of test episodes to generate (default: 1000)"
     )
     parser.add_argument(
         '--max-steps',
@@ -577,77 +632,287 @@ def main():
     
     # Interactive mode: prompt user if no arguments provided
     if len(sys.argv) == 1:  # Only script name, no arguments
-        print("\n" + "="*80)
-        print("CLOSED-LOOP EVALUATION - Interactive Mode")
-        print("="*80)
-        print("\nWhat would you like to evaluate?")
-        print("  1) MPC Controller (from src/mpc_surrogate/mpc_controller.py)")
-        print("  2) All learned models in results/models/")
-        print("  3) Specific learned model (select from list)")
-        print("  4) All sklearn models")
-        print("  5) Exit")
-        print("-"*80)
-        
-        choice = input("Enter choice (1-5): ").strip()
-        
-        if choice == '1':
-            args.controller_type = 'mpc'
-            args.single_model = True
-            num_ep = input("Number of episodes (default=10, 'all' for all 1715): ").strip()
-            args.num_episodes = None if num_ep.lower() == 'all' else (int(num_ep) if num_ep else 10)
-            render = input("Enable rendering? (y/n, default=n): ").strip().lower()
-            args.render = render == 'y'
-            print(f"\n→ Running MPC evaluation with {args.num_episodes or 'all'} episodes, rendering={'ON' if args.render else 'OFF'}")
+        while True:  # Main menu loop
+            print("\n" + "="*80)
+            print("CLOSED-LOOP EVALUATION - Interactive Mode")
+            print("="*80)
+            print("\nWhat would you like to evaluate?")
+            print("  1) MPC Controller (from src/mpc_surrogate/mpc_controller.py)")
+            print("  2) Specific model(s) (select count and choose from sklearn/pytorch)")
+            print("  3) All sklearn models in results/models/")
+            print("  4) All pytorch models in results/pytorch_comparison/models/")
+            print("  5) All sklearn + pytorch models")
+            print("  6) Exit")
+            print("-"*80)
             
-        elif choice == '2':
-            args.single_model = False
-            args.controller_type = None
-            args.model_path = None
-            num_ep = input("Number of episodes per model (default=all, or enter number): ").strip()
-            args.num_episodes = None if not num_ep else int(num_ep)
-            render = input("Enable rendering? (y/n, default=n): ").strip().lower()
-            args.render = render == 'y'
-            print(f"\n→ Evaluating all models with {args.num_episodes or 'all'} episodes each")
+            choice = input("Enter choice (1-6): ").strip()
             
-        elif choice == '3':
-            available = list_available_models('results/models')
-            if not available:
-                print("\nNo models found in results/models/")
-                return
-            print("\nAvailable models:")
-            for idx, (name, path, mtype) in enumerate(available, 1):
-                print(f"  {idx}) [{mtype:8}] {name}")
-            model_choice = int(input(f"\nSelect model (1-{len(available)}): ").strip())
-            if 1 <= model_choice <= len(available):
-                name, path, mtype = available[model_choice - 1]
-                args.model_path = path
-                args.controller_type = mtype
+            if choice == '1':
+                args.controller_type = 'mpc'
                 args.single_model = True
-                num_ep = input("Number of episodes (default=10, 'all' for all): ").strip()
-                args.num_episodes = None if num_ep.lower() == 'all' else (int(num_ep) if num_ep else 10)
-                render = input("Enable rendering? (y/n, default=n): ").strip().lower()
-                args.render = render == 'y'
-                print(f"\n→ Evaluating {name} with {args.num_episodes or 'all'} episodes")
-            else:
-                print("Invalid selection")
-                return
+                # Validate episode count
+                while True:
+                    num_ep = input("Number of episodes to generate (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                print(f"\n→ Running MPC evaluation with {args.num_episodes} episodes, rendering={'ON' if args.render else 'OFF'}")
+                run_evaluation(args)
+                return  # Exit after choice 1 evaluation
                 
-        elif choice == '4':
-            args.controller_type = 'sklearn'
-            args.single_model = False
-            args.model_path = None
-            num_ep = input("Number of episodes per model (default=all, or enter number): ").strip()
-            args.num_episodes = None if not num_ep else int(num_ep)
-            render = input("Enable rendering? (y/n, default=n): ").strip().lower()
-            args.render = render == 'y'    
-            print(f"\n→ Evaluating all sklearn models with {args.num_episodes or 'all'} episodes each")
+            elif choice == '2':
+                # Specific model(s) selection with mixed types allowed
+                while True:
+                    num_models_input = input("How many specific models do you want to evaluate? (default=1, or 'back'): ").strip()
+                    if num_models_input.lower() == 'back':
+                        break  # Break to return to main menu
+                    try:
+                        num_models = int(num_models_input) if num_models_input else 1
+                        if num_models < 1:
+                            print("Please enter at least 1 model.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number or 'back'.")
+                        continue
+                
+                if num_models_input.lower() == 'back':
+                    continue  # Return to main menu
+                
+                all_available = list_available_models()  # Scans both directories
+                if not all_available:
+                    print(f"No models found")
+                    return
+                
+                selected_models = []
+                go_back = False
+                i = 0
+                while i < num_models:
+                    print(f"\n--- Selecting Model {i+1}/{num_models} ---")
+                    print("Available models:")
+                    for idx, (name, path, mtype) in enumerate(all_available, 1):
+                        # Mark already selected models
+                        is_selected = any(m[1] == path for m in selected_models)
+                        marker = " (already selected)" if is_selected else ""
+                        print(f"  {idx}) [{mtype:8}] {name}{marker}")
+                    print(f"  0) Back to main menu")
+                    
+                    model_choice = input(f"Select model {i+1} (1-{len(all_available)}, or 0 to go back): ").strip()
+                    if model_choice == '0':
+                        print("Returning to main menu...")
+                        go_back = True
+                        break
+                    
+                    try:
+                        model_choice = int(model_choice)
+                        if 1 <= model_choice <= len(all_available):
+                            selected_model = all_available[model_choice - 1]
+                            # Check if already selected
+                            if any(m[1] == selected_model[1] for m in selected_models):
+                                print("This model is already selected. Please choose a different one.")
+                                continue  # Re-prompt for this model without incrementing i
+                            else:
+                                selected_models.append(selected_model)
+                                i += 1  # Move to next model only if successfully selected
+                        else:
+                            print("Invalid selection")
+                            continue  # Re-prompt without incrementing i
+                    except ValueError:
+                        print("Invalid input")
+                        continue  # Re-prompt without incrementing i
+                
+                if go_back:
+                    continue  # Return to main menu
+                
+                # Validate episodes input
+                while True:
+                    num_ep = input("Number of episodes per model (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                
+                print(f"\n→ Evaluating {num_models} specific model(s) with {args.num_episodes} episodes each")
+                for name, path, mtype in selected_models:
+                    print(f"\n{'='*80}")
+                    print(f"Evaluating: {name} ({mtype})")
+                    print(f"{'='*80}")
+                    args.model_path = path
+                    args.controller_type = mtype
+                    args.single_model = True
+                    run_evaluation(args)
+                return  # Exit after choice 2 evaluation
             
-        elif choice == '5':
-            print("Exiting...")
-            return
-        else:
-            print("Invalid choice")
-            return
+            elif choice == '3':
+                # All sklearn models
+                args.controller_type = 'sklearn'
+                args.single_model = False
+                args.model_path = None
+                # Validate episodes input
+                while True:
+                    num_ep = input("Number of episodes per model (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                print(f"\n→ Evaluating all sklearn models with {args.num_episodes} episodes each")
+                
+                # Get all sklearn models and evaluate each
+                available = list_available_models()  # Scans both directories
+                sklearn_models = [m for m in available if m[2] == 'sklearn']
+                if not sklearn_models:
+                    print("No sklearn models found.")
+                    continue
+                
+                for idx, (name, path, mtype) in enumerate(sklearn_models, 1):
+                    print(f"\n{'='*80}")
+                    print(f"[{idx}/{len(sklearn_models)}] Evaluating: {name} ({mtype})")
+                    print(f"{'='*80}")
+                    args.model_path = path
+                    args.controller_type = mtype
+                    args.single_model = True
+                    run_evaluation(args)
+                return  # Exit after choice 3 evaluation
+            
+            elif choice == '4':
+                # All pytorch models
+                args.controller_type = 'pytorch'
+                args.single_model = False
+                args.model_path = None
+                # Validate episodes input
+                while True:
+                    num_ep = input("Number of episodes per model (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                print(f"\n→ Evaluating all pytorch models with {args.num_episodes} episodes each")
+                
+                # Get all pytorch models and evaluate each
+                available = list_available_models()  # Scans both directories
+                pytorch_models = [m for m in available if m[2] == 'pytorch']
+                if not pytorch_models:
+                    print("No pytorch models found.")
+                    continue
+                
+                for idx, (name, path, mtype) in enumerate(pytorch_models, 1):
+                    print(f"\n{'='*80}")
+                    print(f"[{idx}/{len(pytorch_models)}] Evaluating: {name} ({mtype})")
+                    print(f"{'='*80}")
+                    args.model_path = path
+                    args.controller_type = mtype
+                    args.single_model = True
+                    run_evaluation(args)
+                return  # Exit after choice 4 evaluation
+                
+            elif choice == '5':
+                # All sklearn + pytorch models
+                args.controller_type = None
+                args.single_model = False
+                args.model_path = None
+                # Validate episodes input
+                while True:
+                    num_ep = input("Number of episodes per model (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                print(f"\n→ Evaluating all sklearn + pytorch models with {args.num_episodes} episodes each")
+                
+                # Get all models and evaluate each
+                available = list_available_models('results/models')
+                if not available:
+                    print("No models found.")
+                    continue
+                
+                for idx, (name, path, mtype) in enumerate(available, 1):
+                    print(f"\n{'='*80}")
+                    print(f"[{idx}/{len(available)}] Evaluating: {name} ({mtype})")
+                    print(f"{'='*80}")
+                    args.model_path = path
+                    args.controller_type = mtype
+                    args.single_model = True
+                    run_evaluation(args)
+                return  # Exit after choice 5 evaluation
+                
+            elif choice == '6':
+                print("Exiting...")
+                return
+            else:
+                print("Invalid choice. Please select 1-6.")
+                continue
     
     # Handle --list-models flag
     if args.list_models:
@@ -743,7 +1008,7 @@ def main():
     # Set random seed
     np.random.seed(args.seed)
     
-    # Run evaluation
+    # Run evaluation on generated episodes
     run_evaluation(args)
 
 
