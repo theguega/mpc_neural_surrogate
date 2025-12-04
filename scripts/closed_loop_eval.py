@@ -1,15 +1,22 @@
 """
 Closed-loop evaluation script for comparing MPC controller with learned surrogate models.
 
-This script runs episodes from the HDF5 dataset where the robot tracks targets using either:
+This script generates test episodes on-the-fly where the robot tracks randomly sampled targets using either:
 - The MPC controller (ground truth)
 - A trained surrogate model (PyTorch .pt/.pth or scikit-learn .pkl)
 
-Models are automatically discovered from results/models/ directory.
-Episodes are loaded from data/robot_mpc_dataset.h5.
+Models are automatically discovered from:
+- results/models/ (scikit-learn .pkl files)
+- results/pytorch_comparison/models/ (PyTorch .pt/.pth files)
 
-Metrics are computed for each episode and aggregated at the end, including
-comparison with the original MPC actions from the dataset.
+For each evaluation run:
+1. Random target positions are sampled in 3D Cartesian space
+2. Robot attempts to reach targets within 150 timesteps
+3. Metrics are computed and aggregated (success rate, tracking error, control effort, etc.)
+4. Results are saved to JSON files in results/closed_loop/
+
+When evaluating multiple models, test episodes are pre-generated once to ensure fair comparison
+across all models within the same run. Each new execution generates fresh random episodes.
 """
 
 import argparse
@@ -385,9 +392,13 @@ def run_episode(env, controller, model, model_type, target_xyz,
     return metrics
 
 
-def run_evaluation(args):
+def run_evaluation(args, test_episodes):
     """
     Main evaluation loop: run multiple episodes and aggregate results.
+    
+    Args:
+        args: Command-line arguments
+        test_episodes: List of pre-generated target positions (generated once per script execution)
     """
     print("=" * 80)
     print("Closed-Loop Evaluation (Generated Test Episodes)")
@@ -397,9 +408,9 @@ def run_evaluation(args):
     env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
     print(f"Environment initialized: {env.model.nq} joints")
     
-    # Generate episodes on-the-fly (test set)
-    total_episodes = args.num_episodes
-    print(f"Preparing to generate {total_episodes} test episodes on-the-fly")
+    # Use the provided test episodes
+    total_episodes = len(test_episodes)
+    print(f"Evaluating on {total_episodes} pre-generated test episodes")
     
     # Load model or controller
     model = None
@@ -429,7 +440,7 @@ def run_evaluation(args):
         with mujoco.viewer.launch_passive(env.model, env.data) as viewer:
             for ep_idx in range(total_episodes):
                 print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
-                target_xyz = sample_3d_cartesian_target(env)
+                target_xyz = test_episodes[ep_idx]
                 metrics = run_episode(
                     env, controller, model, model_type,
                     target_xyz,
@@ -446,7 +457,7 @@ def run_evaluation(args):
     else:
         for ep_idx in range(total_episodes):
             print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
-            target_xyz = sample_3d_cartesian_target(env)
+            target_xyz = test_episodes[ep_idx]
             metrics = run_episode(
                 env, controller, model, model_type,
                 target_xyz,
@@ -672,7 +683,10 @@ def main():
                         print("Please enter 'y' or 'n'.")
                         continue
                 print(f"\n→ Running MPC evaluation with {args.num_episodes} episodes, rendering={'ON' if args.render else 'OFF'}")
-                run_evaluation(args)
+                # Generate test episodes for this evaluation
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                run_evaluation(args, test_episodes)
                 return  # Exit after choice 1 evaluation
                 
             elif choice == '2':
@@ -763,6 +777,13 @@ def main():
                         continue
                 
                 print(f"\n→ Evaluating {num_models} specific model(s) with {args.num_episodes} episodes each")
+                
+                # Generate test episodes once for all models
+                print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+                
                 for name, path, mtype in selected_models:
                     print(f"\n{'='*80}")
                     print(f"Evaluating: {name} ({mtype})")
@@ -770,7 +791,7 @@ def main():
                     args.model_path = path
                     args.controller_type = mtype
                     args.single_model = True
-                    run_evaluation(args)
+                    run_evaluation(args, test_episodes=test_episodes)
                 return  # Exit after choice 2 evaluation
             
             elif choice == '3':
@@ -808,6 +829,12 @@ def main():
                     print("No sklearn models found.")
                     continue
                 
+                # Generate test episodes once for all models
+                print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+                
                 for idx, (name, path, mtype) in enumerate(sklearn_models, 1):
                     print(f"\n{'='*80}")
                     print(f"[{idx}/{len(sklearn_models)}] Evaluating: {name} ({mtype})")
@@ -815,7 +842,7 @@ def main():
                     args.model_path = path
                     args.controller_type = mtype
                     args.single_model = True
-                    run_evaluation(args)
+                    run_evaluation(args, test_episodes=test_episodes)
                 return  # Exit after choice 3 evaluation
             
             elif choice == '4':
@@ -853,6 +880,12 @@ def main():
                     print("No pytorch models found.")
                     continue
                 
+                # Generate test episodes once for all models
+                print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+                
                 for idx, (name, path, mtype) in enumerate(pytorch_models, 1):
                     print(f"\n{'='*80}")
                     print(f"[{idx}/{len(pytorch_models)}] Evaluating: {name} ({mtype})")
@@ -860,7 +893,7 @@ def main():
                     args.model_path = path
                     args.controller_type = mtype
                     args.single_model = True
-                    run_evaluation(args)
+                    run_evaluation(args, test_episodes=test_episodes)
                 return  # Exit after choice 4 evaluation
                 
             elif choice == '5':
@@ -897,6 +930,12 @@ def main():
                     print("No models found.")
                     continue
                 
+                # Generate test episodes once for all models
+                print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+                
                 for idx, (name, path, mtype) in enumerate(available, 1):
                     print(f"\n{'='*80}")
                     print(f"[{idx}/{len(available)}] Evaluating: {name} ({mtype})")
@@ -904,7 +943,7 @@ def main():
                     args.model_path = path
                     args.controller_type = mtype
                     args.single_model = True
-                    run_evaluation(args)
+                    run_evaluation(args, test_episodes=test_episodes)
                 return  # Exit after choice 5 evaluation
                 
             elif choice == '6':
@@ -947,13 +986,19 @@ def main():
         print(f"Rendering: {'Enabled' if args.render else 'Disabled'}")
         print(f"{'='*80}\n")
         
+        # Generate test episodes once for all models
+        print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+        env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+        test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+        print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+        
         for idx, (name, path, mtype) in enumerate(available, 1):
             print(f"\n{'='*80}")
             print(f"[{idx}/{len(available)}] Evaluating: {name} ({mtype})")
             print(f"{'='*80}")
             args.model_path = path
             args.controller_type = mtype
-            run_evaluation(args)
+            run_evaluation(args, test_episodes=test_episodes)
         
         print(f"\n{'='*80}")
         print(f"Completed evaluation of all {len(available)} models")
@@ -993,12 +1038,19 @@ def main():
                 else:
                     # Evaluate all models of this type
                     print(f"\nEvaluating all {len(matching)} {args.controller_type} models...")
+                    
+                    # Generate test episodes once for all models
+                    print(f"Pre-generating {args.num_episodes} test episodes for fair comparison...")
+                    env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                    test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                    print(f"Episodes generated. All models will be evaluated on identical episodes.\n")
+                    
                     for name, path, mtype in matching:
                         print(f"\n{'='*80}")
                         print(f"Evaluating: {name} ({mtype})")
                         print(f"{'='*80}")
                         args.model_path = path
-                        run_evaluation(args)
+                        run_evaluation(args, test_episodes=test_episodes)
                     return
             else:
                 print(f"ERROR: No {args.controller_type} models found in results/models/.")
@@ -1008,8 +1060,13 @@ def main():
     # Set random seed
     np.random.seed(args.seed)
     
+    # Generate test episodes for single model evaluation
+    print(f"Generating {args.num_episodes} test episodes...")
+    env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+    test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+    
     # Run evaluation on generated episodes
-    run_evaluation(args)
+    run_evaluation(args, test_episodes)
 
 
 if __name__ == "__main__":
