@@ -240,10 +240,10 @@ def predict_action(model, state, target, model_type):
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def list_available_models(models_dir='results/models'):
+def list_available_models(models_dir='results/scikit_learn_baseline/models'):
     """
     List all available model files:
-    - results/models/ for .pkl (scikit-learn)
+    - results/scikit_learn_baseline/models/ for .pkl (scikit-learn)
     - results/pytorch_comparison/models/ for .pt/.pth (PyTorch comparisons)
     
     Returns:
@@ -253,7 +253,7 @@ def list_available_models(models_dir='results/models'):
     
     models = []
     
-    # Find scikit-learn models in results/models/
+    # Find scikit-learn models in results/scikit_learn_baseline/models/
     if os.path.exists(models_dir):
         pkl_files = glob.glob(os.path.join(models_dir, '*.pkl'))
         models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
@@ -955,7 +955,7 @@ def main():
     
     # Handle --list-models flag
     if args.list_models:
-        available = list_available_models('results/models')
+        available = list_available_models('results/scikit_learn_baseline/models')
         if available:
             print("\nAvailable models (in results/models/):")
             print("-" * 80)
@@ -973,9 +973,9 @@ def main():
     
     # Default behavior: evaluate ALL models unless --single-model is specified
     if not args.single_model and args.model_path is None and args.controller_type is None:
-        available = list_available_models('results/models')
+        available = list_available_models('results/scikit_learn_baseline/models')
         if not available:
-            print("No models found in results/models/")
+            print("No models found in results/scikit_learn_baseline/models/")
             print("Expected file types: .pkl (scikit-learn), .pt/.pth (PyTorch)")
             return
         
@@ -1028,8 +1028,8 @@ def main():
             print(f"Using MPC controller from src/mpc_surrogate/mpc_controller.py")
             # args.model_path stays None, which is fine for MPC
         else:
-            # Look for learned models in results/models/
-            available = list_available_models('results/models')
+            # Look for learned models in results/scikit_learn_baseline/models/
+            available = list_available_models('results/scikit_learn_baseline/models')
             matching = [m for m in available if m[2] == args.controller_type]
             if matching:
                 if args.single_model:
