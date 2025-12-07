@@ -7,7 +7,7 @@ This script generates test episodes on-the-fly where the robot tracks randomly s
 
 Models are automatically discovered from:
 - results/models/ (scikit-learn .pkl files)
-- results/pytorch_comparison/models/ (PyTorch .pt/.pth files)
+- results/pytorch_comparison/results_sliding_window/models/ (PyTorch .pt/.pth files)
 
 For each evaluation run:
 1. Random target positions are sampled in 3D Cartesian space
@@ -244,7 +244,7 @@ def list_available_models(models_dir='results/scikit_learn_baseline/models'):
     """
     List all available model files:
     - results/scikit_learn_baseline/models/ for .pkl (scikit-learn)
-    - results/pytorch_comparison/models/ for .pt/.pth (PyTorch comparisons)
+    - results/pytorch_comparison/results_sliding_window/models/ for .pt/.pth (PyTorch comparisons)
     
     Returns:
         List of tuples (model_name, filepath, model_type)
@@ -258,8 +258,8 @@ def list_available_models(models_dir='results/scikit_learn_baseline/models'):
         pkl_files = glob.glob(os.path.join(models_dir, '*.pkl'))
         models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
     
-    # Find PyTorch models in results/pytorch_comparison/models/
-    pytorch_dir = 'results/pytorch_comparison/models'
+    # Find PyTorch models in results/pytorch_comparison/results_sliding_window/models/
+    pytorch_dir = 'results/pytorch_comparison/results_sliding_window/models'
     if os.path.exists(pytorch_dir):
         pt_files = glob.glob(os.path.join(pytorch_dir, '*.pt'))
         models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pt_files)])
@@ -325,6 +325,10 @@ def run_episode(env, controller, model, model_type, target_xyz,
         
         ee_errors.append(ee_error)
         joint_errors.append(joint_error)
+        
+        # Early termination: if target is already reached within 0.2m, end episode
+        if ee_error < 0.2:
+            break
         
         # Compute control action
         start_time = time.time()
@@ -484,9 +488,20 @@ def run_evaluation(args, test_episodes):
     mean_action_diff = np.mean([m['mean_action_diff_from_mpc'] for m in all_metrics])
     mean_cpu_percent = np.mean([m['mean_cpu_percent'] for m in all_metrics])
     
+    # Success-specific metrics
+    successful_metrics = [m for m in all_metrics if m['reached_target']]
+    num_successful = len(successful_metrics)
+    steps_to_success = [m['num_steps'] for m in successful_metrics] if successful_metrics else []
+    mean_steps_to_success = np.mean(steps_to_success) if steps_to_success else 0
+    std_steps_to_success = np.std(steps_to_success) if steps_to_success else 0
+    mean_steps_all_episodes = np.mean([m['num_steps'] for m in all_metrics]) if all_metrics else 0
+    
     print(f"Episodes Evaluated: {len(all_metrics)}")
     if len(all_metrics) > 0:
         print(f"Success Rate: {success_rate * 100:.2f}% ({int(success_rate * len(all_metrics))}/{len(all_metrics)} reached target within {args.tolerance:.3f}m tolerance)")
+        if num_successful > 0:
+            print(f"Mean Steps to Success: {mean_steps_to_success:.1f} ± {std_steps_to_success:.1f} (n={num_successful} successful episodes)")
+        print(f"Mean Steps (All Episodes): {mean_steps_all_episodes:.1f}")
         print(f"Mean Final EE Error: {mean_final_error:.4f}m")
         print(f"Mean Tracking Error (Average Position Error): {mean_tracking_error:.4f}m")
         print(f"Mean Control Effort: {mean_control_effort:.4f}")
@@ -507,6 +522,10 @@ def run_evaluation(args, test_episodes):
         'timestamp': datetime.now().isoformat(),
         'aggregate_metrics': {
             'success_rate': float(success_rate),
+            'num_successful_episodes': int(num_successful),
+            'mean_steps_to_success': float(mean_steps_to_success),
+            'std_steps_to_success': float(std_steps_to_success),
+            'mean_steps_all_episodes': float(mean_steps_all_episodes),
             'mean_final_ee_error': float(mean_final_error),
             'std_final_ee_error': float(np.std([m['final_ee_error'] for m in all_metrics])),
             'mean_tracking_error': float(mean_tracking_error),
@@ -651,7 +670,7 @@ def main():
             print("  1) MPC Controller (from src/mpc_surrogate/mpc_controller.py)")
             print("  2) Specific model(s) (select count and choose from sklearn/pytorch)")
             print("  3) All sklearn models in results/models/")
-            print("  4) All pytorch models in results/pytorch_comparison/models/")
+            print("  4) All pytorch models in results/pytorch_comparison/results_sliding_window/models/")
             print("  5) All sklearn + pytorch models")
             print("  6) Exit")
             print("-"*80)
