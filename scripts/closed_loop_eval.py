@@ -6,7 +6,7 @@ This script generates test episodes on-the-fly where the robot tracks randomly s
 - A trained surrogate model (PyTorch .pt/.pth or scikit-learn .pkl)
 
 Models are automatically discovered from:
-- results/models/ (scikit-learn .pkl files)
+- results/scikit_learn_baseline/models/ (scikit-learn .pkl files)
 - results/pytorch_comparison/results_sliding_window/models/ (PyTorch .pt/.pth files)
 
 For each evaluation run:
@@ -128,6 +128,33 @@ def load_model(model_path, model_type):
                 print(f"Detected {num_layers} GRU layers with hidden_dim={hidden_dim}")
                 model = GRU(input_dim=9, hidden_dim=hidden_dim, num_layers=num_layers, output_dim=3)
             elif 'mlp' in filename:
+                # Detect input dimension from filename (sliding window)
+                input_dim = 9  # default
+                window_size = 1  # default
+                if 'win5' in filename or 'window5' in filename:
+                    input_dim = 33  # 5*6 + 3
+                    window_size = 5
+                    print(f"Detected sliding window size 5 from filename")
+                elif 'win' in filename or 'window' in filename:
+                    # Try to extract window size from filename
+                    import re
+                    match = re.search(r'win(?:dow)?_?(\d+)', filename, re.IGNORECASE)
+                    if match:
+                        window_size = int(match.group(1))
+                        input_dim = window_size * 6 + 3
+                        print(f"Detected sliding window size {window_size} from filename")
+                
+                # If still default, try to infer from first layer weight shape
+                if input_dim == 9 and 'network.0.weight' in loaded_obj:
+                    detected_input_dim = loaded_obj['network.0.weight'].shape[1]
+                    if detected_input_dim != 9:
+                        input_dim = detected_input_dim
+                        window_size = (input_dim - 3) // 6
+                        print(f"Detected input_dim={input_dim} from weight shape (window_size={window_size})")
+                
+                print(f"Using input_dim={input_dim}")
+                
+                print(f"Using input_dim={input_dim}")
                 print("Instantiating MLP architecture...")
                 # Detect all hidden dimensions from state dict
                 # Look for LINEAR layers only (indices 0, 2, 4, 6, 8 if using BN/Dropout, or 0, 1, 2... if not)
@@ -170,7 +197,7 @@ def load_model(model_path, model_type):
                 
                 # Create MLP WITHOUT batchnorm/dropout if the saved model doesn't have them
                 if has_batchnorm:
-                    model = MLP(input_dim=9, hidden_dims=hidden_dims, output_dim=3)
+                    model = MLP(input_dim=input_dim, hidden_dims=hidden_dims, output_dim=3)
                 else:
                     # Create a version without BN and dropout
                     class SimpleMLP(nn.Module):
@@ -190,11 +217,19 @@ def load_model(model_path, model_type):
                         def forward(self, x):
                             return self.network(x)
                     
-                    model = SimpleMLP(input_dim=9, hidden_dims=hidden_dims, output_dim=3)
+                    model = SimpleMLP(input_dim=input_dim, hidden_dims=hidden_dims, output_dim=3)
+                
+                # Attach window_size as model attribute for later use
+                model.window_size = window_size
             else:
                 # Default to MLP if architecture cannot be determined
                 print("Architecture not detected in filename, defaulting to MLP...")
-                model = MLP(input_dim=9, hidden_dims=[128, 64], output_dim=3)
+                # Try to infer input_dim from first layer weight
+                input_dim = 9
+                if 'network.0.weight' in loaded_obj:
+                    input_dim = loaded_obj['network.0.weight'].shape[1]
+                    print(f"Detected input_dim={input_dim} from weight shape")
+                model = MLP(input_dim=input_dim, hidden_dims=[128, 64], output_dim=3)
             
             model.load_state_dict(loaded_obj)
             print(f"Loaded state_dict")
@@ -211,7 +246,7 @@ def load_model(model_path, model_type):
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def predict_action(model, state, target, model_type):
+def predict_action(model, state, target, model_type, state_history=None, window_size=1):
     """
     Predict control action using the loaded model.
     
@@ -220,12 +255,24 @@ def predict_action(model, state, target, model_type):
         state: Current robot state (6D: [q, q_dot])
         target: Target joint positions (3D)
         model_type: 'pytorch' or 'sklearn'
+        state_history: List of past states for windowed models (optional)
+        window_size: Number of timesteps in sliding window (default=1)
     
     Returns:
         Predicted control action (3D torque vector)
     """
-    # Construct input: [state, target]
-    input_data = np.concatenate([state, target])
+    # For windowed models, construct input from history
+    if window_size > 1 and state_history is not None:
+        # Use last window_size states
+        history_window = state_history[-window_size:]
+        # Pad if needed (at episode start)
+        while len(history_window) < window_size:
+            history_window.insert(0, state)  # Repeat first state
+        # Flatten: [state_t-w+1, ..., state_t, target]
+        input_data = np.concatenate([np.concatenate(history_window), target])
+    else:
+        # Standard input: [state, target]
+        input_data = np.concatenate([state, target])
     
     if model_type == 'pytorch':
         import torch
@@ -240,7 +287,10 @@ def predict_action(model, state, target, model_type):
         raise ValueError(f"Unknown model type: {model_type}")
 
 
-def list_available_models(models_dir='results/scikit_learn_baseline/models'):
+SKLEARN_MODELS_DIR = 'results/scikit_learn_baseline/models'
+
+
+def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
     """
     List all available model files:
     - results/scikit_learn_baseline/models/ for .pkl (scikit-learn)
@@ -253,12 +303,12 @@ def list_available_models(models_dir='results/scikit_learn_baseline/models'):
     
     models = []
     
-    # Find scikit-learn models in results/scikit_learn_baseline/models/
+    # Find scikit-learn models
     if os.path.exists(models_dir):
         pkl_files = glob.glob(os.path.join(models_dir, '*.pkl'))
         models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
     
-    # Find PyTorch models in results/pytorch_comparison/results_sliding_window/models/
+    # Find PyTorch models
     pytorch_dir = 'results/pytorch_comparison/results_sliding_window/models'
     if os.path.exists(pytorch_dir):
         pt_files = glob.glob(os.path.join(pytorch_dir, '*.pt'))
@@ -269,8 +319,9 @@ def list_available_models(models_dir='results/scikit_learn_baseline/models'):
     return sorted(models)
 
 
-def run_episode(env, controller, model, model_type, target_xyz, 
-                max_steps=150, tolerance=0.2, render=False, viewer=None):
+def run_episode(env, controller, model, model_type, target_xyz,
+                max_steps=150, tolerance=0.2, render=False, viewer=None,
+                window_size=1):
     """
     Run a single episode where the robot tracks targets from the dataset.
     
@@ -306,6 +357,7 @@ def run_episode(env, controller, model, model_type, target_xyz,
     solve_times = []
     action_differences = []  # Compare with MPC actions
     cpu_percentages = []  # Track CPU utilization
+    state_history = []  # For sliding window models
     
     # Get process for CPU tracking
     process = psutil.Process()
@@ -329,7 +381,6 @@ def run_episode(env, controller, model, model_type, target_xyz,
         # Early termination: if target is already reached within 0.2m, end episode
         if ee_error < 0.2:
             break
-        
         # Compute control action
         start_time = time.time()
         cpu_before = process.cpu_percent()
@@ -339,8 +390,15 @@ def run_episode(env, controller, model, model_type, target_xyz,
             if not solved:
                 tau = np.zeros(3)
         else:
-            tau = predict_action(model, current_state, target_joints, model_type)
+            tau = predict_action(model, current_state, target_joints, model_type, 
+                               state_history=state_history, window_size=window_size)
         
+        # Update state history for windowed models
+        state_history.append(current_state.copy())
+        if len(state_history) > window_size:
+            state_history.pop(0)
+        
+        solve_time = time.time() - start_time
         solve_time = time.time() - start_time
         cpu_after = process.cpu_percent()
         
@@ -451,7 +509,8 @@ def run_evaluation(args, test_episodes):
                     max_steps=args.max_steps or 150,
                     tolerance=args.tolerance,
                     render=True,
-                    viewer=viewer
+                    viewer=viewer,
+                    window_size=getattr(model, 'window_size', 1)
                 )
                 metrics['episode'] = ep_idx
                 all_metrics.append(metrics)
@@ -467,7 +526,8 @@ def run_evaluation(args, test_episodes):
                 target_xyz,
                 max_steps=args.max_steps or 150,
                 tolerance=args.tolerance,
-                render=False
+                render=False,
+                window_size=getattr(model, 'window_size', 1)
             )
             metrics['episode'] = ep_idx
             all_metrics.append(metrics)
@@ -592,7 +652,7 @@ def main():
         '--model-path',
         type=str,
         default=None,
-        help="Path to model file. If not specified and not using MPC, auto-selects from results/models/."
+        help="Path to model file. If not specified and not using MPC, auto-selects from results/scikit_learn_baseline/models/."
     )
     # Dataset path removed: we generate test episodes on-the-fly
     
@@ -650,7 +710,7 @@ def main():
     parser.add_argument(
         '--list-models',
         action='store_true',
-        help="List all available models in results/models/ and exit"
+        help="List all available models in results/scikit_learn_baseline/models/ and exit"
     )
     parser.add_argument(
         '--single-model',
@@ -669,7 +729,7 @@ def main():
             print("\nWhat would you like to evaluate?")
             print("  1) MPC Controller (from src/mpc_surrogate/mpc_controller.py)")
             print("  2) Specific model(s) (select count and choose from sklearn/pytorch)")
-            print("  3) All sklearn models in results/models/")
+            print("  3) All sklearn models in results/scikit_learn_baseline/models/")
             print("  4) All pytorch models in results/pytorch_comparison/results_sliding_window/models/")
             print("  5) All sklearn + pytorch models")
             print("  6) Exit")
@@ -944,7 +1004,7 @@ def main():
                 print(f"\n→ Evaluating all sklearn + pytorch models with {args.num_episodes} episodes each")
                 
                 # Get all models and evaluate each
-                available = list_available_models('results/models')
+                available = list_available_models(SKLEARN_MODELS_DIR)
                 if not available:
                     print("No models found.")
                     continue
@@ -974,9 +1034,9 @@ def main():
     
     # Handle --list-models flag
     if args.list_models:
-        available = list_available_models('results/scikit_learn_baseline/models')
+        available = list_available_models(SKLEARN_MODELS_DIR)
         if available:
-            print("\nAvailable models (in results/models/):")
+            print("\nAvailable models (in results/scikit_learn_baseline/models/):")
             print("-" * 80)
             for name, path, mtype in available:
                 print(f"  [{mtype:8}] {name:<45} → {path}")
@@ -992,14 +1052,14 @@ def main():
     
     # Default behavior: evaluate ALL models unless --single-model is specified
     if not args.single_model and args.model_path is None and args.controller_type is None:
-        available = list_available_models('results/scikit_learn_baseline/models')
+        available = list_available_models(SKLEARN_MODELS_DIR)
         if not available:
             print("No models found in results/scikit_learn_baseline/models/")
             print("Expected file types: .pkl (scikit-learn), .pt/.pth (PyTorch)")
             return
         
         print(f"\n{'='*80}")
-        print(f"Evaluating ALL {len(available)} models in results/models/")
+        print(f"Evaluating ALL {len(available)} models in results/scikit_learn_baseline/models/")
         print(f"{'='*80}")
         print(f"Episodes per model: {args.num_episodes if args.num_episodes else 'ALL (1715)'}")
         print(f"Rendering: {'Enabled' if args.render else 'Disabled'}")
@@ -1048,7 +1108,7 @@ def main():
             # args.model_path stays None, which is fine for MPC
         else:
             # Look for learned models in results/scikit_learn_baseline/models/
-            available = list_available_models('results/scikit_learn_baseline/models')
+            available = list_available_models(SKLEARN_MODELS_DIR)
             matching = [m for m in available if m[2] == args.controller_type]
             if matching:
                 if args.single_model:
@@ -1072,7 +1132,7 @@ def main():
                         run_evaluation(args, test_episodes=test_episodes)
                     return
             else:
-                print(f"ERROR: No {args.controller_type} models found in results/models/.")
+                print(f"ERROR: No {args.controller_type} models found in results/scikit_learn_baseline/models/.")
                 print(f"Use --list-models to see available models.")
                 return
     

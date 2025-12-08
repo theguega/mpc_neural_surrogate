@@ -42,79 +42,73 @@ df = pd.DataFrame(data)
 print(f"\nLoaded {len(df)} models")
 print(df)
 
-# Get top 3 for each metric
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-fig.suptitle('Top 3 Models by Key Metrics', fontsize=16, fontweight='bold')
+# Helper for consistent colors
+def color_map(types):
+    return ['#2ecc71' if t == 'pytorch' else '#3498db' for t in types]
 
 # 1. Success Rate (higher is better)
-ax = axes[0, 0]
-top_success = df.nlargest(3, 'Success Rate')
-colors = ['#2ecc71' if t == 'pytorch' else '#3498db' for t in top_success['Type']]
-bars = ax.barh(range(len(top_success)), top_success['Success Rate'], color=colors)
-ax.set_yticks(range(len(top_success)))
-ax.set_yticklabels(top_success['Model'])
-ax.set_xlabel('Success Rate (%)')
-ax.set_title('Top 3 - Success Rate', fontweight='bold')
-ax.set_xlim([0, 100])
+top_success = df.nlargest(5, 'Success Rate')
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_success)), top_success['Success Rate'], color=color_map(top_success['Type']))
+ax.set_xticks(range(len(top_success)))
+ax.set_xticklabels(top_success['Model'], rotation=45, ha='right')
+ax.set_ylabel('Success Rate (%)')
+ax.set_title('Top 5 - Success Rate', fontweight='bold')
+ax.set_ylim([0, 1])
 for i, (idx, row) in enumerate(top_success.iterrows()):
-    ax.text(row['Success Rate'] + 2, i, f"{row['Success Rate']:.1f}%", va='center')
-ax.grid(axis='x', alpha=0.3)
+    ax.text(i, row['Success Rate'] + 0.02, f"{row['Success Rate']:.1f}%", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.savefig('results/closed_loop_success.png', dpi=150, bbox_inches='tight')
+print("✓ Plot saved to results/closed_loop_success.png")
 
 # 2. Final Error (lower is better)
-ax = axes[0, 1]
-top_error = df.nsmallest(3, 'Final Error (m)')
-colors = ['#2ecc71' if t == 'pytorch' else '#3498db' for t in top_error['Type']]
-bars = ax.barh(range(len(top_error)), top_error['Final Error (m)'], color=colors)
-ax.set_yticks(range(len(top_error)))
-ax.set_yticklabels(top_error['Model'])
-ax.set_xlabel('Mean Final EE Error (m)')
-ax.set_title('Top 3 - Final Error (Lower Better)', fontweight='bold')
+top_error = df.nsmallest(5, 'Final Error (m)')
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_error)), top_error['Final Error (m)'], color=color_map(top_error['Type']))
+ax.set_xticks(range(len(top_error)))
+ax.set_xticklabels(top_error['Model'], rotation=45, ha='right')
+ax.set_ylabel('Mean Final EE Error (m)')
+ax.set_title('Top 5 - Final Error (Lower Better)', fontweight='bold')
+ax.set_ylim([0, top_error['Final Error (m)'].max() + 0.1])
 for i, (idx, row) in enumerate(top_error.iterrows()):
-    ax.text(row['Final Error (m)'] + 0.02, i, f"{row['Final Error (m)']:.4f}m", va='center')
-ax.grid(axis='x', alpha=0.3)
+    ax.text(i, row['Final Error (m)'] + 0.02, f"{row['Final Error (m)']:.4f}m", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.savefig('results/closed_loop_final_error.png', dpi=150, bbox_inches='tight')
+print("✓ Plot saved to results/closed_loop_final_error.png")
 
 # 3. Solve Time (lower is better)
-ax = axes[1, 0]
-top_time = df.nsmallest(3, 'Solve Time (ms)')
-colors = ['#2ecc71' if t == 'pytorch' else '#3498db' for t in top_time['Type']]
-bars = ax.barh(range(len(top_time)), top_time['Solve Time (ms)'], color=colors)
-ax.set_yticks(range(len(top_time)))
-ax.set_yticklabels(top_time['Model'])
-ax.set_xlabel('Mean Solve Time (ms)')
-ax.set_title('Top 3 - Computational Efficiency (Lower Better)', fontweight='bold')
+top_time = df.nsmallest(5, 'Solve Time (ms)')
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_time)), top_time['Solve Time (ms)'], color=color_map(top_time['Type']))
+ax.set_xticks(range(len(top_time)))
+ax.set_xticklabels(top_time['Model'], rotation=45, ha='right')
+ax.set_ylabel('Mean Solve Time (ms)')
+ax.set_ylim([0, top_time['Solve Time (ms)'].max() + 1])
+ax.set_title('Top 5 - Computational Efficiency (Lower Better)', fontweight='bold')
 for i, (idx, row) in enumerate(top_time.iterrows()):
-    ax.text(row['Solve Time (ms)'] + 0.05, i, f"{row['Solve Time (ms)']:.3f}ms", va='center')
-ax.grid(axis='x', alpha=0.3)
+    ax.text(i, row['Solve Time (ms)'] + 0.05, f"{row['Solve Time (ms)']:.3f}ms", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.savefig('results/closed_loop_solvetime.png', dpi=150, bbox_inches='tight')
+print("✓ Plot saved to results/closed_loop_solvetime.png")
 
 # 4. CPU Percent (lower is better)
-ax = axes[1, 1]
-top_cpu = df.nsmallest(3, 'CPU Percent')
-colors = ['#2ecc71' if t == 'pytorch' else '#3498db' for t in top_cpu['Type']]
-bars = ax.barh(range(len(top_cpu)), top_cpu['CPU Percent'], color=colors)
-ax.set_yticks(range(len(top_cpu)))
-ax.set_yticklabels(top_cpu['Model'])
-ax.set_xlabel('CPU Utilization (%)')
-ax.set_title('Top 3 - CPU Efficiency (Lower Better)', fontweight='bold')
+top_cpu = df.nsmallest(5, 'CPU Percent')
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_cpu)), top_cpu['CPU Percent'], color=color_map(top_cpu['Type']))
+ax.set_xticks(range(len(top_cpu)))
+ax.set_xticklabels(top_cpu['Model'], rotation=45, ha='right')
+ax.set_ylabel('CPU Utilization (%)')
+ax.set_ylim([0, top_cpu['CPU Percent'].max() + 1])
+ax.set_title('Top 5 - CPU Efficiency (Lower Better)', fontweight='bold')
 for i, (idx, row) in enumerate(top_cpu.iterrows()):
-    ax.text(row['CPU Percent'] + 0.1, i, f"{row['CPU Percent']:.2f}%", va='center')
-ax.grid(axis='x', alpha=0.3)
-
-# Add legend
-from matplotlib.patches import Patch
-legend_elements = [
-    Patch(facecolor='#2ecc71', label='PyTorch'),
-    Patch(facecolor='#3498db', label='Scikit-Learn')
-]
-fig.legend(handles=legend_elements, loc='upper center', bbox_to_anchor=(0.5, -0.02), ncol=2)
-
-plt.tight_layout()
-plt.savefig('results/closed_loop_comparison.png', dpi=150, bbox_inches='tight')
-print("\n✓ Plot saved to results/closed_loop_comparison.png")
-plt.show()
+    ax.text(i, row['CPU Percent'] + 0.1, f"{row['CPU Percent']:.2f}%", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.savefig('results/closed_loop_cpu.png', dpi=150, bbox_inches='tight')
+print("✓ Plot saved to results/closed_loop_cpu.png")
 
 # Print summary table
 print("\n" + "="*80)
-print("SUMMARY: Top 3 Models by Metric")
+print("SUMMARY: Top 5 Models by Metric")
 print("="*80)
 
 print("\nSUCCESS RATE (Higher is Better)")
