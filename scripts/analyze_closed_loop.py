@@ -9,6 +9,7 @@ import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.patches import Patch
 
 # Load all JSON files from results/closed_loop/
 results_dir = 'results/closed_loop'
@@ -56,6 +57,12 @@ def color_map(types):
     }
     return [palette.get(t, '#7f8c8d') for t in types]
 
+legend_elements = [
+    Patch(facecolor='#2ecc71', label='PyTorch'),
+    Patch(facecolor='#3498db', label='Scikit-Learn'),
+    Patch(facecolor='#e67e22', label='MPC')
+]
+
 def select_top_with_mpc(df_metric: pd.DataFrame, metric: str, n: int = 5, ascending: bool = False):
     sorted_df = df_metric.sort_values(metric, ascending=ascending)
     if not ascending:
@@ -79,6 +86,7 @@ ax.set_ylim([0, 100])
 for i, (idx, row) in enumerate(top_success.iterrows()):
     ax.text(i, row['Success Rate (%)'] + 2, f"{row['Success Rate (%)']:.1f}%", ha='center', va='bottom')
 ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop_success.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop_success.png")
 
@@ -94,6 +102,7 @@ ax.set_ylim([0, top_error['Final Error (m)'].max() + 0.1])
 for i, (idx, row) in enumerate(top_error.iterrows()):
     ax.text(i, row['Final Error (m)'] + 0.02, f"{row['Final Error (m)']:.4f}m", ha='center', va='bottom')
 ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop_final_error.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop_final_error.png")
 
@@ -109,6 +118,7 @@ ax.set_title('Top 5 - Computational Efficiency (Lower Better)', fontweight='bold
 for i, (idx, row) in enumerate(top_time.iterrows()):
     ax.text(i, row['Solve Time (ms)'] + 0.05, f"{row['Solve Time (ms)']:.3f}ms", ha='center', va='bottom')
 ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop_solvetime.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop_solvetime.png")
 
@@ -124,6 +134,7 @@ ax.set_title('Top 5 - CPU Efficiency (Lower Better)', fontweight='bold')
 for i, (idx, row) in enumerate(top_cpu.iterrows()):
     ax.text(i, row['CPU Percent'] + 0.1, f"{row['CPU Percent']:.2f}%", ha='center', va='bottom')
 ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop_cpu.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop_cpu.png")
 
@@ -140,6 +151,7 @@ if not top_steps_success.empty:
     for i, (idx, row) in enumerate(top_steps_success.iterrows()):
         ax.text(i, row['Steps to Success'] + 0.5, f"{row['Steps to Success']:.1f}", ha='center', va='bottom')
     ax.grid(axis='y', alpha=0.3)
+    fig.legend(handles=legend_elements, loc='upper right')
     fig.savefig('results/closed_loop_steps_success.png', dpi=150, bbox_inches='tight')
     print("Plot saved to results/closed_loop_steps_success.png")
 
@@ -156,6 +168,7 @@ if not top_steps_all.empty:
     for i, (idx, row) in enumerate(top_steps_all.iterrows()):
         ax.text(i, row['Steps (All Episodes)'] + 0.5, f"{row['Steps (All Episodes)']:.1f}", ha='center', va='bottom')
     ax.grid(axis='y', alpha=0.3)
+    fig.legend(handles=legend_elements, loc='upper right')
     fig.savefig('results/closed_loop_steps_all.png', dpi=150, bbox_inches='tight')
     print("Plot saved to results/closed_loop_steps_all.png")
 
@@ -172,6 +185,7 @@ if not top_track.empty:
     for i, (idx, row) in enumerate(top_track.iterrows()):
         ax.text(i, row['Tracking Error (m)'] + 0.01, f"{row['Tracking Error (m)']:.3f}m", ha='center', va='bottom')
     ax.grid(axis='y', alpha=0.3)
+    fig.legend(handles=legend_elements, loc='upper right')
     fig.savefig('results/closed_loop_tracking_error.png', dpi=150, bbox_inches='tight')
     print("Plot saved to results/closed_loop_tracking_error.png")
 
@@ -188,6 +202,7 @@ if not top_effort.empty:
     for i, (idx, row) in enumerate(top_effort.iterrows()):
         ax.text(i, row['Control Effort'] + 0.05, f"{row['Control Effort']:.2f}", ha='center', va='bottom')
     ax.grid(axis='y', alpha=0.3)
+    fig.legend(handles=legend_elements, loc='upper right')
     fig.savefig('results/closed_loop_control_effort.png', dpi=150, bbox_inches='tight')
     print("Plot saved to results/closed_loop_control_effort.png")
 
