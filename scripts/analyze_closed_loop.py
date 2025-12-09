@@ -33,15 +33,22 @@ for filepath in json_files:
     data.append({
         'Model': model_name,
         'Type': controller_type,
-        'Success Rate': agg.get('success_rate', 0),
+        'Success Rate @0.02m': agg.get('success_rate', 0),
+        'Success Rate @0.03m': agg.get('success_rate_relaxed', 0),
+        'Success Rate @0.05m': agg.get('success_rate_loose', 0),
         'Final Error (m)': agg.get('mean_final_ee_error', 0),
         'Solve Time (ms)': agg.get('mean_solve_time', 0) * 1000,  # Convert to ms
+        'CPU Time (s)': agg.get('mean_cpu_time', 0),
         'CPU Percent': agg.get('mean_cpu_percent', 0),
-        'Steps to Success': agg.get('mean_steps_to_success', 0),
+        'Steps to Success @0.02m': agg.get('mean_steps_to_success', 0),
+        'Steps to Success @0.03m': agg.get('mean_steps_to_success_relaxed', 0),
+        'Steps to Success @0.05m': agg.get('mean_steps_to_success_loose', 0),
         'Steps (All Episodes)': agg.get('mean_steps_all_episodes', 0),
         'Tracking Error (m)': agg.get('mean_tracking_error', 0),
         'Control Effort': agg.get('mean_control_effort', 0),
-        'Action Diff from MPC': agg.get('mean_action_diff_from_mpc', 0)
+        'Mean Joint Error (MPC only)': agg.get('mean_joint_error', None),
+        'Action Diff from MPC': agg.get('mean_action_diff_from_mpc', 0),
+        'Wall Time (s)': agg.get('mean_wall_time', 0)
     })
 
 df = pd.DataFrame(data)
@@ -73,22 +80,30 @@ def select_top_with_mpc(df_metric: pd.DataFrame, metric: str, n: int = 5, ascend
         top = pd.concat([top, mpc_rows.head(1)], ignore_index=True)
     return top
 
-# 1. Success Rate (higher is better)
-top_success = select_top_with_mpc(df, 'Success Rate', n=5, ascending=False).copy()
-top_success['Success Rate (%)'] = top_success['Success Rate'] * 100
-fig, ax = plt.subplots(figsize=(8, 6))
-ax.bar(range(len(top_success)), top_success['Success Rate (%)'], color=color_map(top_success['Type']))
-ax.set_xticks(range(len(top_success)))
+# 1. Success Rate (all thresholds, higher is better)
+top_success = select_top_with_mpc(df, 'Success Rate @0.02m', n=5, ascending=False).copy()
+fig, ax = plt.subplots(figsize=(10, 6))
+x_pos = np.arange(len(top_success))
+width = 0.25
+
+top_success['Success Rate @0.02m (%)'] = top_success['Success Rate @0.02m'] * 100
+top_success['Success Rate @0.03m (%)'] = top_success['Success Rate @0.03m'] * 100
+top_success['Success Rate @0.05m (%)'] = top_success['Success Rate @0.05m'] * 100
+
+ax.bar(x_pos - width, top_success['Success Rate @0.02m (%)'], width, label='@0.02m (strict)', color='#e74c3c')
+ax.bar(x_pos, top_success['Success Rate @0.03m (%)'], width, label='@0.03m (moderate)', color='#f39c12')
+ax.bar(x_pos + width, top_success['Success Rate @0.05m (%)'], width, label='@0.05m (relaxed)', color='#27ae60')
+
+ax.set_xticks(x_pos)
 ax.set_xticklabels(top_success['Model'], rotation=45, ha='right')
 ax.set_ylabel('Success Rate (%)')
-ax.set_title('Top 5 - Success Rate', fontweight='bold')
+ax.set_title('Top 5 - Success Rate (All Thresholds)', fontweight='bold')
 ax.set_ylim([0, 100])
-for i, (idx, row) in enumerate(top_success.iterrows()):
-    ax.text(i, row['Success Rate (%)'] + 2, f"{row['Success Rate (%)']:.1f}%", ha='center', va='bottom')
+ax.legend(loc='upper left')
 ax.grid(axis='y', alpha=0.3)
-fig.legend(handles=legend_elements, loc='upper right')
-fig.savefig('results/closed_loop_success.png', dpi=150, bbox_inches='tight')
-print("Plot saved to results/closed_loop_success.png")
+fig.tight_layout()
+fig.savefig('results/closed_loop_success_thresholds.png', dpi=150, bbox_inches='tight')
+print("Plot saved to results/closed_loop_success_thresholds.png")
 
 # 2. Final Error (lower is better)
 top_error = select_top_with_mpc(df, 'Final Error (m)', n=5, ascending=True)
@@ -138,22 +153,40 @@ fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop_cpu.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop_cpu.png")
 
-# 5. Steps to Success (lower is better)
-top_steps_success = select_top_with_mpc(df.replace(0, np.nan).dropna(subset=['Steps to Success']), 'Steps to Success', n=5, ascending=True)
+# 4b. Wall Time (lower is better)
+top_walltime = select_top_with_mpc(df, 'Wall Time (s)', n=5, ascending=True)
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_walltime)), top_walltime['Wall Time (s)'], color=color_map(top_walltime['Type']))
+ax.set_xticks(range(len(top_walltime)))
+ax.set_xticklabels(top_walltime['Model'], rotation=45, ha='right')
+ax.set_ylabel('Wall Time per Episode (s)')
+ax.set_ylim([0, top_walltime['Wall Time (s)'].max() + 0.2])
+ax.set_title('Top 5 - Episode Speed (Lower Better)', fontweight='bold')
+for i, (idx, row) in enumerate(top_walltime.iterrows()):
+    ax.text(i, row['Wall Time (s)'] + 0.02, f"{row['Wall Time (s)']:.3f}s", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
+fig.savefig('results/closed_loop_walltime.png', dpi=150, bbox_inches='tight')
+print("Plot saved to results/closed_loop_walltime.png")
+
+# 5. Steps to Success (all thresholds, lower is better)
+top_steps_success = select_top_with_mpc(df.replace(0, np.nan).dropna(subset=['Steps to Success @0.02m']), 'Steps to Success @0.02m', n=5, ascending=True)
 if not top_steps_success.empty:
-    fig, ax = plt.subplots(figsize=(8, 6))
-    ax.bar(range(len(top_steps_success)), top_steps_success['Steps to Success'], color=color_map(top_steps_success['Type']))
-    ax.set_xticks(range(len(top_steps_success)))
+    fig, ax = plt.subplots(figsize=(10, 6))
+    x_pos = np.arange(len(top_steps_success))
+    width = 0.25
+    ax.bar(x_pos - width, top_steps_success['Steps to Success @0.02m'], width, label='@0.02m', color='#e74c3c')
+    ax.bar(x_pos, top_steps_success['Steps to Success @0.03m'], width, label='@0.03m', color='#f39c12')
+    ax.bar(x_pos + width, top_steps_success['Steps to Success @0.05m'], width, label='@0.05m', color='#27ae60')
+    ax.set_xticks(x_pos)
     ax.set_xticklabels(top_steps_success['Model'], rotation=45, ha='right')
     ax.set_ylabel('Mean Steps to Success')
-    ax.set_ylim([0, top_steps_success['Steps to Success'].max() + 5])
-    ax.set_title('Top 5 - Steps to Success (Lower Better)', fontweight='bold')
-    for i, (idx, row) in enumerate(top_steps_success.iterrows()):
-        ax.text(i, row['Steps to Success'] + 0.5, f"{row['Steps to Success']:.1f}", ha='center', va='bottom')
+    ax.set_title('Top 5 - Steps to Success (All Thresholds, Lower Better)', fontweight='bold')
+    ax.legend(loc='upper left')
     ax.grid(axis='y', alpha=0.3)
-    fig.legend(handles=legend_elements, loc='upper right')
-    fig.savefig('results/closed_loop_steps_success.png', dpi=150, bbox_inches='tight')
-    print("Plot saved to results/closed_loop_steps_success.png")
+    fig.tight_layout()
+    fig.savefig('results/closed_loop_steps_success_thresholds.png', dpi=150, bbox_inches='tight')
+    print("Plot saved to results/closed_loop_steps_success_thresholds.png")
 
 # 6. Steps (All Episodes) (lower is better)
 top_steps_all = select_top_with_mpc(df.replace(0, np.nan).dropna(subset=['Steps (All Episodes)']), 'Steps (All Episodes)', n=5, ascending=True)
@@ -207,19 +240,34 @@ if not top_effort.empty:
     print("Plot saved to results/closed_loop_control_effort.png")
 
 # Print summary table
-print("\n" + "="*80)
+print("\n" + "="*100)
 print("SUMMARY: Top 5 Models by Metric")
-print("="*80)
+print("="*100)
 
-print("\nSUCCESS RATE (Higher is Better)")
-success_summary = top_success[['Model', 'Type', 'Success Rate (%)']].copy()
+print("\nSUCCESS RATE @ 0.02m (strict) - Higher is Better")
+success_summary = top_success[['Model', 'Type', 'Success Rate @0.02m (%)']].copy()
 print(success_summary.to_string(index=False))
+
+print("\nSUCCESS RATE @ 0.03m (moderate) - Higher is Better")
+success_mod = top_success[['Model', 'Type', 'Success Rate @0.03m']].copy()
+success_mod['Success Rate @0.03m'] = success_mod['Success Rate @0.03m'] * 100
+success_mod.columns = ['Model', 'Type', 'Success Rate @0.03m (%)']
+print(success_mod.to_string(index=False))
+
+print("\nSUCCESS RATE @ 0.05m (relaxed) - Higher is Better")
+success_relaxed = top_success[['Model', 'Type', 'Success Rate @0.05m']].copy()
+success_relaxed['Success Rate @0.05m'] = success_relaxed['Success Rate @0.05m'] * 100
+success_relaxed.columns = ['Model', 'Type', 'Success Rate @0.05m (%)']
+print(success_relaxed.to_string(index=False))
 
 print("\nFINAL ERROR (Lower is Better)")
 print(top_error[['Model', 'Type', 'Final Error (m)']].to_string(index=False))
 
 print("\nSOLVE TIME (Lower is Better)")
 print(top_time[['Model', 'Type', 'Solve Time (ms)']].to_string(index=False))
+
+print("\nWALL TIME PER EPISODE (Lower is Better)")
+print(top_walltime[['Model', 'Type', 'Wall Time (s)']].to_string(index=False))
 
 print("\nCPU UTILIZATION (Lower is Better)")
 print(top_cpu[['Model', 'Type', 'CPU Percent']].to_string(index=False))

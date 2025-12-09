@@ -32,55 +32,66 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 import psutil
+import multiprocessing as mp
 from mpc_surrogate.mpc_controller import MPCController
 from mpc_surrogate.mujoco_env import MuJoCoEnvironment
 from mpc_surrogate.utils import solve_inverse_kinematics
 from data_generator import sample_3d_cartesian_target
 
 # PyTorch model architectures
-try:
-    import torch
-    import torch.nn as nn
-    
-    class MLP(nn.Module):
-        """Simple Multi-Layer Perceptron (matches notebook architecture)"""
-        def __init__(self, input_dim=9, hidden_dims=[128, 64], output_dim=3):
-            super(MLP, self).__init__()
-            layers = []
-            prev_dim = input_dim
-            
-            for hidden_dim in hidden_dims:
-                layers.extend([
-                    nn.Linear(prev_dim, hidden_dim),
-                    nn.ReLU(),
-                    nn.BatchNorm1d(hidden_dim),
-                    nn.Dropout(0.1)
-                ])
-                prev_dim = hidden_dim
-            
-            layers.append(nn.Linear(prev_dim, output_dim))
-            self.network = nn.Sequential(*layers)
+DEVICE = None
+import torch
+import torch.nn as nn
+
+def _select_device():
+    """Prefer CUDA, then Intel GPU via XPU, else CPU."""
+    # if torch.cuda.is_available():
+    #     return torch.device("cuda")
+    # Intel GPU via oneAPI / XPU
+    # if hasattr(torch, "xpu") and hasattr(torch.xpu, "is_available") and torch.xpu.is_available():
+    #     return torch.device("xpu")
+    return torch.device("cpu")
+
+DEVICE = _select_device()
+
+class MLP(nn.Module):
+    """Simple Multi-Layer Perceptron (matches notebook architecture)"""
+    def __init__(self, input_dim=9, hidden_dims=[128, 64], output_dim=3):
+        super(MLP, self).__init__()
+        layers = []
+        prev_dim = input_dim
         
-        def forward(self, x):
-            return self.network(x)
-    
-    class GRU(nn.Module):
-        """GRU-based recurrent neural network for sequence-to-sequence prediction"""
-        def __init__(self, input_dim=9, hidden_dim=128, num_layers=2, output_dim=3):
-            super(GRU, self).__init__()
-            self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
-            self.fc = nn.Linear(hidden_dim, output_dim)
+        for hidden_dim in hidden_dims:
+            layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU(),
+                nn.BatchNorm1d(hidden_dim),
+                nn.Dropout(0.1)
+            ])
+            prev_dim = hidden_dim
         
-        def forward(self, x):
-            # GRU expects (batch, seq_len, features)
-            if x.dim() == 2:  # If input is (batch, features), add sequence dimension
-                x = x.unsqueeze(1)
-            gru_out, _ = self.gru(x)
-            # Use last output for prediction
-            out = self.fc(gru_out[:, -1, :])
-            return out
-except ImportError:
-    pass  # PyTorch not available, only sklearn will work
+        layers.append(nn.Linear(prev_dim, output_dim))
+        self.network = nn.Sequential(*layers)
+    
+    def forward(self, x):
+        return self.network(x)
+
+
+class GRU(nn.Module):
+    """GRU-based recurrent neural network for sequence-to-sequence prediction"""
+    def __init__(self, input_dim=9, hidden_dim=128, num_layers=2, output_dim=3):
+        super(GRU, self).__init__()
+        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.fc = nn.Linear(hidden_dim, output_dim)
+    
+    def forward(self, x):
+        # GRU expects (batch, seq_len, features)
+        if x.dim() == 2:  # If input is (batch, features), add sequence dimension
+            x = x.unsqueeze(1)
+        gru_out, _ = self.gru(x)
+        # Use last output for prediction
+        out = self.fc(gru_out[:, -1, :])
+        return out
 
 
 def load_model(model_path, model_type):
@@ -97,8 +108,9 @@ def load_model(model_path, model_type):
     if model_type == 'pytorch':
         import torch
         
-        # Load the file
-        loaded_obj = torch.load(model_path, map_location='cpu')
+        # Load the file onto the selected device (default cpu)
+        map_location = DEVICE if DEVICE is not None else 'cpu'
+        loaded_obj = torch.load(model_path, map_location=map_location)
         
         # Check if it's a full model or a state_dict
         if isinstance(loaded_obj, nn.Module):
@@ -237,6 +249,8 @@ def load_model(model_path, model_type):
             raise ValueError(f"Unknown PyTorch save format. Expected nn.Module or dict, got {type(loaded_obj)}")
         
         model.eval()
+        if DEVICE is not None:
+            model.to(DEVICE)
         return model
     elif model_type == 'sklearn':
         with open(model_path, 'rb') as f:
@@ -277,9 +291,11 @@ def predict_action(model, state, target, model_type, state_history=None, window_
     if model_type == 'pytorch':
         import torch
         with torch.no_grad():
-            input_tensor = torch.FloatTensor(input_data).unsqueeze(0)
+            input_tensor = torch.as_tensor(input_data, dtype=torch.float32).unsqueeze(0)
+            if DEVICE is not None:
+                input_tensor = input_tensor.to(DEVICE)
             output = model(input_tensor)
-            return output.squeeze(0).cpu().numpy()
+            return output.squeeze(0).detach().cpu().numpy()
     elif model_type == 'sklearn':
         input_data = input_data.reshape(1, -1)
         return model.predict(input_data)[0]
@@ -320,7 +336,7 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
 
 
 def run_episode(env, controller, model, model_type, target_xyz,
-                max_steps=150, tolerance=0.03, render=False, viewer=None,
+                max_steps=150, tolerance=0.02, render=False, viewer=None,
                 window_size=1):
     """
     Run a single episode where the robot tracks targets from the dataset.
@@ -356,14 +372,18 @@ def run_episode(env, controller, model, model_type, target_xyz,
     control_efforts = []
     solve_times = []
     action_differences = []  # Compare with MPC actions
-    cpu_percentages = []  # Track CPU utilization
     state_history = []  # For sliding window models
     
     # Get process for CPU tracking
     process = psutil.Process()
+    cpu_times_start = process.cpu_times()
+    wall_time_start = time.time()
     
-    # Solve IK to get target joint positions once
-    _, target_joints = solve_inverse_kinematics(env, target_xyz)
+    # Solve IK only if needed (for MPC controller)
+    target_joints = None
+    if model_type == 'mpc':
+        _, target_joints = solve_inverse_kinematics(env, target_xyz)
+    
     for step in range(max_steps):
         current_state = obs[:6]
         current_ee_pos = env.get_ee_position()
@@ -373,25 +393,36 @@ def run_episode(env, controller, model, model_type, target_xyz,
             env.data.mocap_pos[0] = target_xyz
         
         ee_error = np.linalg.norm(current_ee_pos - target_xyz)
-        joint_error = np.linalg.norm(current_state[:3] - target_joints)
+        
+        # Joint error only meaningful for MPC (learned models use Cartesian targets)
+        if target_joints is not None:
+            joint_error = np.linalg.norm(current_state[:3] - target_joints)
+        else:
+            joint_error = 0.0  # Not applicable for learned models
         
         ee_errors.append(ee_error)
         joint_errors.append(joint_error)
         
-        # Early termination: if target is already reached within 0.03m, end episode
-        if ee_error < 0.03:
+        # Early termination: if target is already reached within 0.02m, end episode
+        if ee_error < 0.02:
             break
         # Compute control action
         start_time = time.time()
-        cpu_before = process.cpu_percent()
         
         if model_type == 'mpc':
             tau, solved = controller.solve(current_state, target_joints)
             if not solved:
                 tau = np.zeros(3)
         else:
-            tau = predict_action(model, current_state, target_joints, model_type, 
-                               state_history=state_history, window_size=window_size)
+            # Learned models were trained on Cartesian targets, not joint-space targets
+            tau = predict_action(
+                model,
+                current_state,
+                target_xyz,
+                model_type,
+                state_history=state_history,
+                window_size=window_size,
+            )
         
         # Update state history for windowed models
         state_history.append(current_state.copy())
@@ -399,11 +430,8 @@ def run_episode(env, controller, model, model_type, target_xyz,
             state_history.pop(0)
         
         solve_time = time.time() - start_time
-        solve_time = time.time() - start_time
-        cpu_after = process.cpu_percent()
         
         solve_times.append(solve_time)
-        cpu_percentages.append((cpu_before + cpu_after) / 2)
         
         control_effort = np.linalg.norm(tau)
         control_efforts.append(control_effort)
@@ -427,11 +455,22 @@ def run_episode(env, controller, model, model_type, target_xyz,
     # Compute episode metrics
     final_ee_error = ee_errors[-1] if ee_errors else 0
     reached_target = bool(final_ee_error < tolerance)
+    reached_target_relaxed = bool(final_ee_error < 0.03)  # Relaxed tolerance
+    reached_target_loose = bool(final_ee_error < 0.05)  # Loose tolerance
+    
+    # CPU utilization for the episode
+    cpu_times_end = process.cpu_times()
+    wall_time_end = time.time()
+    episode_wall_time = wall_time_end - wall_time_start
+    episode_cpu_time = (cpu_times_end.user - cpu_times_start.user) + (cpu_times_end.system - cpu_times_start.system)
+    cpu_percent = (episode_cpu_time / episode_wall_time * 100) if episode_wall_time > 0 else 0
     
     metrics = {
         'episode_name': 'generated_test_episode',
         'num_steps': len(ee_errors),
         'reached_target': reached_target,
+        'reached_target_relaxed': reached_target_relaxed,
+        'reached_target_loose': reached_target_loose,
         'final_ee_error': final_ee_error,
         'final_joint_error': joint_errors[-1] if joint_errors else 0,
         'mean_ee_error': np.mean(ee_errors) if ee_errors else 0,
@@ -447,10 +486,36 @@ def run_episode(env, controller, model, model_type, target_xyz,
         'total_time': np.sum(solve_times) if solve_times else 0,
         'mean_action_diff_from_mpc': np.mean(action_differences) if action_differences else 0,
         'std_action_diff_from_mpc': np.std(action_differences) if action_differences else 0,
-        'mean_cpu_percent': np.mean(cpu_percentages) if cpu_percentages else 0,
-        'std_cpu_percent': np.std(cpu_percentages) if cpu_percentages else 0
+        'episode_cpu_time': episode_cpu_time,
+        'episode_wall_time': episode_wall_time,
+        'cpu_percent': cpu_percent
     }
     
+    return metrics
+
+
+def _run_episode_worker(worker_args):
+    """Worker for parallel episode evaluation (used for learned models only)."""
+    ep_idx, model_path, model_type, target_xyz, max_steps, tolerance, window_size = worker_args
+
+    # Create per-process environment and model/controller
+    env = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+    controller = None
+    model = None
+    if model_type == 'mpc':
+        controller = MPCController(dt=0.05, prediction_horizon=20)
+    else:
+        model = load_model(model_path, model_type)
+
+    metrics = run_episode(
+        env, controller, model, model_type,
+        target_xyz,
+        max_steps=max_steps,
+        tolerance=tolerance,
+        render=False,
+        window_size=window_size,
+    )
+    metrics['episode'] = ep_idx
     return metrics
 
 
@@ -518,22 +583,45 @@ def run_evaluation(args, test_episodes):
                       f"Reached: {metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m, tol: {args.tolerance:.3f}m), "
                       f"Mean EE error: {metrics['mean_ee_error']:.4f}m")
     else:
-        for ep_idx in range(total_episodes):
-            print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
-            target_xyz = test_episodes[ep_idx]
-            metrics = run_episode(
-                env, controller, model, model_type,
-                target_xyz,
-                max_steps=args.max_steps or 150,
-                tolerance=args.tolerance,
-                render=False,
-                window_size=getattr(model, 'window_size', 1)
-            )
-            metrics['episode'] = ep_idx
-            all_metrics.append(metrics)
-            print(f"  Steps: {metrics['num_steps']}, "
-                  f"Reached: {metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m, tol: {args.tolerance:.3f}m), "
-                  f"Mean EE error: {metrics['mean_ee_error']:.4f}m")
+        # Parallel path for learned models (no render). MPC stays sequential to avoid solver contention.
+        if model_type != 'mpc' and args.num_workers and args.num_workers > 1:
+            print(f"Using {args.num_workers} workers (learned models only, no render)...")
+            worker_args = [
+                (
+                    ep_idx,
+                    args.model_path,
+                    model_type,
+                    test_episodes[ep_idx],
+                    args.max_steps or 150,
+                    args.tolerance,
+                    getattr(model, 'window_size', 1),
+                )
+                for ep_idx in range(total_episodes)
+            ]
+            with mp.Pool(processes=args.num_workers) as pool:
+                for metrics in pool.imap_unordered(_run_episode_worker, worker_args):
+                    all_metrics.append(metrics)
+                    print(f"  Episode {metrics['episode'] + 1}/{total_episodes}: Steps={metrics['num_steps']}, "
+                          f"Reached={metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m)")
+            # Restore original ordering by episode index
+            all_metrics = sorted(all_metrics, key=lambda m: m['episode'])
+        else:
+            for ep_idx in range(total_episodes):
+                print(f"\nEpisode {ep_idx + 1}/{total_episodes}")
+                target_xyz = test_episodes[ep_idx]
+                metrics = run_episode(
+                    env, controller, model, model_type,
+                    target_xyz,
+                    max_steps=args.max_steps or 150,
+                    tolerance=args.tolerance,
+                    render=False,
+                    window_size=getattr(model, 'window_size', 1)
+                )
+                metrics['episode'] = ep_idx
+                all_metrics.append(metrics)
+                print(f"  Steps: {metrics['num_steps']}, "
+                      f"Reached: {metrics['reached_target']} (final: {metrics['final_ee_error']:.4f}m, tol: {args.tolerance:.3f}m), "
+                      f"Mean EE error: {metrics['mean_ee_error']:.4f}m")
     
     # Aggregate results
     print("\n" + "=" * 80)
@@ -541,12 +629,26 @@ def run_evaluation(args, test_episodes):
     print("=" * 80)
     
     success_rate = np.mean([m['reached_target'] for m in all_metrics])
+    success_rate_relaxed = np.mean([m['reached_target_relaxed'] for m in all_metrics])
+    success_rate_loose = np.mean([m['reached_target_loose'] for m in all_metrics])
     mean_final_error = np.mean([m['final_ee_error'] for m in all_metrics])
     mean_tracking_error = np.mean([m['mean_ee_error'] for m in all_metrics])
     mean_control_effort = np.mean([m['mean_control_effort'] for m in all_metrics])
     mean_solve_time = np.mean([m['mean_solve_time'] for m in all_metrics])
     mean_action_diff = np.mean([m['mean_action_diff_from_mpc'] for m in all_metrics])
-    mean_cpu_percent = np.mean([m['mean_cpu_percent'] for m in all_metrics])
+    mean_cpu_percent = np.mean([m['cpu_percent'] for m in all_metrics])
+    mean_cpu_time = np.mean([m['episode_cpu_time'] for m in all_metrics])
+    mean_wall_time = np.mean([m['episode_wall_time'] for m in all_metrics])
+    if model_type == 'mpc':
+        mean_final_joint_error = np.mean([m['final_joint_error'] for m in all_metrics])
+        std_final_joint_error = np.std([m['final_joint_error'] for m in all_metrics])
+        mean_joint_error = np.mean([m['mean_joint_error'] for m in all_metrics])
+        std_joint_error = np.std([m['mean_joint_error'] for m in all_metrics])
+    else:
+        mean_final_joint_error = None
+        std_final_joint_error = None
+        mean_joint_error = None
+        std_joint_error = None
     
     # Success-specific metrics
     successful_metrics = [m for m in all_metrics if m['reached_target']]
@@ -554,20 +656,43 @@ def run_evaluation(args, test_episodes):
     steps_to_success = [m['num_steps'] for m in successful_metrics] if successful_metrics else []
     mean_steps_to_success = np.mean(steps_to_success) if steps_to_success else 0
     std_steps_to_success = np.std(steps_to_success) if steps_to_success else 0
+    
+    # Relaxed tolerance metrics
+    successful_metrics_relaxed = [m for m in all_metrics if m['reached_target_relaxed']]
+    num_successful_relaxed = len(successful_metrics_relaxed)
+    steps_to_success_relaxed = [m['num_steps'] for m in successful_metrics_relaxed] if successful_metrics_relaxed else []
+    mean_steps_to_success_relaxed = np.mean(steps_to_success_relaxed) if steps_to_success_relaxed else 0
+    
+    # Loose tolerance metrics
+    successful_metrics_loose = [m for m in all_metrics if m['reached_target_loose']]
+    num_successful_loose = len(successful_metrics_loose)
+    steps_to_success_loose = [m['num_steps'] for m in successful_metrics_loose] if successful_metrics_loose else []
+    mean_steps_to_success_loose = np.mean(steps_to_success_loose) if steps_to_success_loose else 0
+    
     mean_steps_all_episodes = np.mean([m['num_steps'] for m in all_metrics]) if all_metrics else 0
     
     print(f"Episodes Evaluated: {len(all_metrics)}")
     if len(all_metrics) > 0:
-        print(f"Success Rate: {success_rate * 100:.2f}% ({int(success_rate * len(all_metrics))}/{len(all_metrics)} reached target within {args.tolerance:.3f}m tolerance)")
+        print(f"Success Rate @ 0.02m (strict): {success_rate * 100:.2f}% ({int(success_rate * len(all_metrics))}/{len(all_metrics)} episodes)")
+        print(f"Success Rate @ 0.03m (moderate): {success_rate_relaxed * 100:.2f}% ({int(success_rate_relaxed * len(all_metrics))}/{len(all_metrics)} episodes)")
+        print(f"Success Rate @ 0.05m (relaxed): {success_rate_loose * 100:.2f}% ({int(success_rate_loose * len(all_metrics))}/{len(all_metrics)} episodes)")
         if num_successful > 0:
-            print(f"Mean Steps to Success: {mean_steps_to_success:.1f} ± {std_steps_to_success:.1f} (n={num_successful} successful episodes)")
+            print(f"Mean Steps to Success @ 0.02m: {mean_steps_to_success:.1f} ± {std_steps_to_success:.1f} (n={num_successful})")
+        if num_successful_relaxed > num_successful:
+            print(f"Mean Steps to Success @ 0.03m: {mean_steps_to_success_relaxed:.1f} (n={num_successful_relaxed})")
+        if num_successful_loose > num_successful_relaxed:
+            print(f"Mean Steps to Success @ 0.05m: {mean_steps_to_success_loose:.1f} (n={num_successful_loose})")
         print(f"Mean Steps (All Episodes): {mean_steps_all_episodes:.1f}")
         print(f"Mean Final EE Error: {mean_final_error:.4f}m")
         print(f"Mean Tracking Error (Average Position Error): {mean_tracking_error:.4f}m")
         print(f"Mean Control Effort: {mean_control_effort:.4f}")
         print(f"Mean Solve Time (Computational Efficiency): {mean_solve_time * 1000:.4f}ms")
         print(f"Mean Action Difference from MPC: {mean_action_diff:.4f}")
-        print(f"Mean CPU Utilization (Computational Cost): {mean_cpu_percent:.2f}%")
+        print(f"Mean CPU Time per Episode: {mean_cpu_time:.4f}s")
+        print(f"Mean CPU Utilization: {mean_cpu_percent:.2f}%")
+        if model_type == 'mpc':
+            print(f"Mean Final Joint Error (MPC only): {mean_final_joint_error:.4f} rad")
+            print(f"Mean Joint Error over Episode (MPC only): {mean_joint_error:.4f} rad ± {std_joint_error:.4f}")
     else:
         print("No episodes were evaluated.")
     
@@ -582,9 +707,15 @@ def run_evaluation(args, test_episodes):
         'timestamp': datetime.now().isoformat(),
         'aggregate_metrics': {
             'success_rate': float(success_rate),
+            'success_rate_relaxed': float(success_rate_relaxed),
+            'success_rate_loose': float(success_rate_loose),
             'num_successful_episodes': int(num_successful),
+            'num_successful_episodes_relaxed': int(num_successful_relaxed),
+            'num_successful_episodes_loose': int(num_successful_loose),
             'mean_steps_to_success': float(mean_steps_to_success),
             'std_steps_to_success': float(std_steps_to_success),
+            'mean_steps_to_success_relaxed': float(mean_steps_to_success_relaxed),
+            'mean_steps_to_success_loose': float(mean_steps_to_success_loose),
             'mean_steps_all_episodes': float(mean_steps_all_episodes),
             'mean_final_ee_error': float(mean_final_error),
             'std_final_ee_error': float(np.std([m['final_ee_error'] for m in all_metrics])),
@@ -596,8 +727,17 @@ def run_evaluation(args, test_episodes):
             'std_solve_time': float(np.std([m['mean_solve_time'] for m in all_metrics])),
             'mean_action_diff_from_mpc': float(mean_action_diff),
             'std_action_diff_from_mpc': float(np.std([m['mean_action_diff_from_mpc'] for m in all_metrics])),
+            'mean_cpu_time': float(mean_cpu_time),
+            'std_cpu_time': float(np.std([m['episode_cpu_time'] for m in all_metrics])),
+            'mean_wall_time': float(mean_wall_time),
+            'std_wall_time': float(np.std([m['episode_wall_time'] for m in all_metrics])),
             'mean_cpu_percent': float(mean_cpu_percent),
-            'std_cpu_percent': float(np.std([m['mean_cpu_percent'] for m in all_metrics]))
+            'std_cpu_percent': float(np.std([m['cpu_percent'] for m in all_metrics])),
+            'mean_final_joint_error': float(mean_final_joint_error) if mean_final_joint_error is not None else None,
+            'std_final_joint_error': float(std_final_joint_error) if std_final_joint_error is not None else None,
+            'mean_joint_error': float(mean_joint_error) if mean_joint_error is not None else None,
+            'std_joint_error': float(std_joint_error) if std_joint_error is not None else None,
+            'joint_error_note': 'MPC only; learned models set to 0'
         },
         'episode_metrics': all_metrics
     }
@@ -664,6 +804,12 @@ def main():
         help="Number of test episodes to generate (default: 1000)"
     )
     parser.add_argument(
+        '--num-workers',
+        type=int,
+        default=8,
+        help="Number of parallel workers for learned models (no render). Use 1 for MPC or when rendering."
+    )
+    parser.add_argument(
         '--max-steps',
         type=int,
         default=None,
@@ -672,8 +818,8 @@ def main():
     parser.add_argument(
         '--tolerance',
         type=float,
-        default=0.03,
-        help="Distance threshold for target reached in meters (default: 0.03m = 20cm, same as dataset generation)"
+        default=0.02,
+        help="Distance threshold for target reached in meters (default: 0.02m = 20cm, same as dataset generation)"
     )
     
     # Visualization
