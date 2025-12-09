@@ -320,7 +320,7 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
 
 
 def run_episode(env, controller, model, model_type, target_xyz,
-                max_steps=150, tolerance=0.2, render=False, viewer=None,
+                max_steps=150, tolerance=0.03, render=False, viewer=None,
                 window_size=1):
     """
     Run a single episode where the robot tracks targets from the dataset.
@@ -378,8 +378,8 @@ def run_episode(env, controller, model, model_type, target_xyz,
         ee_errors.append(ee_error)
         joint_errors.append(joint_error)
         
-        # Early termination: if target is already reached within 0.2m, end episode
-        if ee_error < 0.2:
+        # Early termination: if target is already reached within 0.03m, end episode
+        if ee_error < 0.03:
             break
         # Compute control action
         start_time = time.time()
@@ -672,8 +672,8 @@ def main():
     parser.add_argument(
         '--tolerance',
         type=float,
-        default=0.2,
-        help="Distance threshold for target reached in meters (default: 0.2m = 20cm, same as dataset generation)"
+        default=0.03,
+        help="Distance threshold for target reached in meters (default: 0.03m = 20cm, same as dataset generation)"
     )
     
     # Visualization
@@ -732,10 +732,11 @@ def main():
             print("  3) All sklearn models in results/scikit_learn_baseline/models/")
             print("  4) All pytorch models in results/pytorch_comparison/results_sliding_window/models/")
             print("  5) All sklearn + pytorch models")
-            print("  6) Exit")
+            print("  6) MPC + ALL learned models (for fair comparison)")
+            print("  7) Exit")
             print("-"*80)
             
-            choice = input("Enter choice (1-6): ").strip()
+            choice = input("Enter choice (1-7): ").strip()
             
             if choice == '1':
                 args.controller_type = 'mpc'
@@ -1026,10 +1027,72 @@ def main():
                 return  # Exit after choice 5 evaluation
                 
             elif choice == '6':
+                # MPC + ALL learned models
+                args.controller_type = None
+                args.single_model = False
+                args.model_path = None
+                # Validate episodes input
+                while True:
+                    num_ep = input("Number of episodes per model (default=1000): ").strip()
+                    try:
+                        args.num_episodes = int(num_ep) if num_ep else 1000
+                        if args.num_episodes <= 0:
+                            print("Please enter a positive number of episodes.")
+                            continue
+                        break
+                    except ValueError:
+                        print("Invalid input. Please enter a number.")
+                        continue
+                # Validate rendering input
+                while True:
+                    render = input("Enable rendering? (y/n, default=n): ").strip().lower()
+                    if render in ['y', 'n', '']:
+                        args.render = render == 'y'
+                        break
+                    else:
+                        print("Please enter 'y' or 'n'.")
+                        continue
+                print(f"\n→ Evaluating MPC + all sklearn + pytorch models with {args.num_episodes} episodes each")
+                
+                # Get all models
+                available = list_available_models(SKLEARN_MODELS_DIR)
+                if not available:
+                    print("No learned models found.")
+                    print("Will evaluate MPC only.")
+                    all_controllers = [('MPC', None, 'mpc')]
+                else:
+                    all_controllers = [('MPC', None, 'mpc')] + available
+                
+                print(f"\nTotal controllers to evaluate: {len(all_controllers)}")
+                print(f"  - MPC (baseline)")
+                print(f"  - {len(available)} learned models")
+                
+                # Generate test episodes once for all models
+                print(f"\nPre-generating {args.num_episodes} test episodes for fair comparison...")
+                env_temp = MuJoCoEnvironment("models/3dof_robot_arm.xml")
+                test_episodes = [sample_3d_cartesian_target(env_temp) for _ in range(args.num_episodes)]
+                print(f"Episodes generated. All controllers will be evaluated on identical episodes.\n")
+                
+                for idx, (name, path, mtype) in enumerate(all_controllers, 1):
+                    print(f"\n{'='*80}")
+                    print(f"[{idx}/{len(all_controllers)}] Evaluating: {name} ({mtype})")
+                    print(f"{'='*80}")
+                    args.model_path = path
+                    args.controller_type = mtype
+                    args.single_model = True
+                    run_evaluation(args, test_episodes=test_episodes)
+                
+                print(f"\n{'='*80}")
+                print(f"Completed evaluation of MPC + all {len(available)} learned models")
+                print(f"Results saved to: {args.output_dir}")
+                print(f"{'='*80}")
+                return  # Exit after choice 6 evaluation
+                
+            elif choice == '7':
                 print("Exiting...")
                 return
             else:
-                print("Invalid choice. Please select 1-6.")
+                print("Invalid choice. Please select 1-7.")
                 continue
     
     # Handle --list-models flag
