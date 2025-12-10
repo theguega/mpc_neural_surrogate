@@ -277,11 +277,13 @@ def predict_action(model, state, target, model_type, state_history=None, window_
     """
     # For windowed models, construct input from history
     if window_size > 1 and state_history is not None:
-        # Use last window_size states
-        history_window = state_history[-window_size:]
-        # Pad if needed (at episode start)
+        # Pad with ZEROS if history is incomplete (early in episode)
+        history_window = list(state_history)
         while len(history_window) < window_size:
-            history_window.insert(0, state)  # Repeat first state
+            history_window.insert(0, np.zeros(6))  # Zero padding at beginning
+        # Use only the most recent window_size states
+        # Ensures size is constant
+        history_window = history_window[-window_size:]
         # Flatten: [state_t-w+1, ..., state_t, target]
         input_data = np.concatenate([np.concatenate(history_window), target])
     else:
@@ -406,6 +408,12 @@ def run_episode(env, controller, model, model_type, target_xyz,
         # Early termination: if target is already reached within 0.02m, end episode
         if ee_error < 0.02:
             break
+        
+        # Update state history BEFORE prediction (for windowed models)
+        state_history.append(current_state.copy())
+        if len(state_history) > window_size:
+            state_history.pop(0)
+        
         # Compute control action
         start_time = time.time()
         
@@ -423,11 +431,6 @@ def run_episode(env, controller, model, model_type, target_xyz,
                 state_history=state_history,
                 window_size=window_size,
             )
-        
-        # Update state history for windowed models
-        state_history.append(current_state.copy())
-        if len(state_history) > window_size:
-            state_history.pop(0)
         
         solve_time = time.time() - start_time
         

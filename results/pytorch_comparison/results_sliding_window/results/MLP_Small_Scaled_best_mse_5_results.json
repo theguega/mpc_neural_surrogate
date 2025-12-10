@@ -1,0 +1,33 @@
+{
+  "model_name": "MLP_Small_Scaled",
+  "loss_type": "mse",
+  "training_history": [
+    {
+      "epoch": 1,
+      "train_loss": 4.158110638691196,
+      "val_loss": 2.3093800097703934,
+      "val_mse": 2.325745105743408,
+      "val_mae": 0.538413941860199,
+      "val_da": 0.8955589229513929,
+      "val_ev": 0.7044511437416077,
+      "val_mse_per_torque": "[3.0438151 1.4144274 2.518993 ]",
+      "epoch_time": 7.603200197219849
+    }
+  ],
+  "best_results": {
+    "loss": 2.3093800097703934,
+    "mse": 2.325745105743408,
+    "mae": 0.538413941860199,
+    "direction_accuracy": 0.8955589229513929,
+    "explained_variance": 0.7044511437416077,
+    "mse_per_torque": "[3.0438151 1.4144274 2.518993 ]"
+  },
+  "final_test_results": {
+    "loss": 2.4934475579813347,
+    "mse": 2.4940521717071533,
+    "mae": 0.5486857891082764,
+    "direction_accuracy": 0.8961665693714731,
+    "explained_variance": 0.7044435143470764,
+    "mse_per_torque": "[3.3835006 1.2317917 2.8668637]"
+  }
+}
