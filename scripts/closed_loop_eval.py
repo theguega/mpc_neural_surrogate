@@ -7,7 +7,7 @@ This script generates test episodes on-the-fly where the robot tracks randomly s
 
 Models are automatically discovered from:
 - results/scikit_learn_baseline/models/ (scikit-learn .pkl files)
-- results/pytorch_comparison/results_sliding_window/models/ (PyTorch .pt/.pth files)
+- results/pytorch_comparison/models/ (PyTorch .pt/.pth files)
 
 For each evaluation run:
 1. Random target positions are sampled in 3D Cartesian space
@@ -43,16 +43,9 @@ DEVICE = None
 import torch
 import torch.nn as nn
 
-def _select_device():
-    """Prefer CUDA, then Intel GPU via XPU, else CPU."""
-    # if torch.cuda.is_available():
-    #     return torch.device("cuda")
-    # Intel GPU via oneAPI / XPU
-    # if hasattr(torch, "xpu") and hasattr(torch.xpu, "is_available") and torch.xpu.is_available():
-    #     return torch.device("xpu")
-    return torch.device("cpu")
-
-DEVICE = _select_device()
+# CPU is fastest for inference of small models
+DEVICE = torch.device("cpu")
+CPU_CORES = psutil.cpu_count(logical=False) # For default number of workers
 
 class MLP(nn.Module):
     """Simple Multi-Layer Perceptron (matches notebook architecture)"""
@@ -312,7 +305,7 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
     """
     List all available model files:
     - results/scikit_learn_baseline/models/ for .pkl (scikit-learn)
-    - results/pytorch_comparison/results_sliding_window/models/ for .pt/.pth (PyTorch comparisons)
+    - results/pytorch_comparison/models/ for .pt/.pth (PyTorch comparisons)
     
     Returns:
         List of tuples (model_name, filepath, model_type)
@@ -327,7 +320,7 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
         models.extend([(os.path.basename(f), f, 'sklearn') for f in sorted(pkl_files)])
     
     # Find PyTorch models
-    pytorch_dir = 'results/pytorch_comparison/results_sliding_window/models'
+    pytorch_dir = 'results/pytorch_comparison/models'
     if os.path.exists(pytorch_dir):
         pt_files = glob.glob(os.path.join(pytorch_dir, '*.pt'))
         models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pt_files)])
@@ -809,7 +802,7 @@ def main():
     parser.add_argument(
         '--num-workers',
         type=int,
-        default=8,
+        default=CPU_CORES,
         help="Number of parallel workers for learned models (no render). Use 1 for MPC or when rendering."
     )
     parser.add_argument(
@@ -879,7 +872,7 @@ def main():
             print("  1) MPC Controller (from src/mpc_surrogate/mpc_controller.py)")
             print("  2) Specific model(s) (select count and choose from sklearn/pytorch)")
             print("  3) All sklearn models in results/scikit_learn_baseline/models/")
-            print("  4) All pytorch models in results/pytorch_comparison/results_sliding_window/models/")
+            print("  4) All pytorch models in results/pytorch_comparison/models/")
             print("  5) All sklearn + pytorch models")
             print("  6) MPC + ALL learned models (for fair comparison)")
             print("  7) Exit")
