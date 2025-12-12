@@ -3,11 +3,11 @@ Closed-loop evaluation script for comparing MPC controller with learned surrogat
 
 This script generates test episodes on-the-fly where the robot tracks randomly sampled targets using either:
 - The MPC controller (ground truth)
-- A trained surrogate model (PyTorch .pt/.pth or scikit-learn .pkl)
+- A trained surrogate model (PyTorch .pt or scikit-learn .pkl)
 
 Models are automatically discovered from:
 - results/scikit_learn_baseline/models/ (scikit-learn .pkl files)
-- results/pytorch_comparison/models/ (PyTorch .pt/.pth files)
+- results/pytorch_comparison/models/ (PyTorch .pt files)
 
 For each evaluation run:
 1. Random target positions are sampled in 3D Cartesian space
@@ -47,43 +47,46 @@ import torch.nn as nn
 DEVICE = torch.device("cpu")
 CPU_CORES = psutil.cpu_count(logical=False) # For default number of workers
 
+# Classes from the ipnyb
 class MLP(nn.Module):
-    """Simple Multi-Layer Perceptron (matches notebook architecture)"""
+    """Simple Multi-Layer Perceptron"""
     def __init__(self, input_dim=9, hidden_dims=[128, 64], output_dim=3):
         super(MLP, self).__init__()
         layers = []
         prev_dim = input_dim
-        
+
         for hidden_dim in hidden_dims:
             layers.extend([
                 nn.Linear(prev_dim, hidden_dim),
                 nn.ReLU(),
-                nn.BatchNorm1d(hidden_dim),
-                nn.Dropout(0.1)
             ])
             prev_dim = hidden_dim
-        
+
         layers.append(nn.Linear(prev_dim, output_dim))
         self.network = nn.Sequential(*layers)
-    
+
     def forward(self, x):
         return self.network(x)
 
-
 class GRU(nn.Module):
-    """GRU-based recurrent neural network for sequence-to-sequence prediction"""
     def __init__(self, input_dim=9, hidden_dim=128, num_layers=2, output_dim=3):
         super(GRU, self).__init__()
-        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.hidden_dim = hidden_dim
+        self.num_layers = num_layers
+        self.gru = nn.GRU(input_dim, hidden_dim, num_layers, batch_first=True, dropout=0.1)
         self.fc = nn.Linear(hidden_dim, output_dim)
-    
-    def forward(self, x):
-        # GRU expects (batch, seq_len, features)
-        if x.dim() == 2:  # If input is (batch, features), add sequence dimension
-            x = x.unsqueeze(1)
-        gru_out, _ = self.gru(x)
-        # Use last output for prediction
-        out = self.fc(gru_out[:, -1, :])
+
+    def forward(self, x, lengths=None):
+        # x: (B, T, 9)
+        if lengths is not None:
+            lengths_cpu = lengths.cpu()
+            x_packed = nn.utils.rnn.pack_padded_sequence(x, lengths_cpu, batch_first=True, enforce_sorted=False)
+            out_packed, hn = self.gru(x_packed)
+            out, _ = nn.utils.rnn.pad_packed_sequence(out_packed, batch_first=True)
+        else:
+            out, hn = self.gru(x) # (B, T_max, 3)
+
+        out = self.fc(out)
         return out
 
 
@@ -92,7 +95,7 @@ def load_model(model_path, model_type):
     Load a trained model from file.
     
     Args:
-        model_path: Path to the model file (.pt/.pth for PyTorch, .pkl for scikit-learn)
+        model_path: Path to the model file (.pt for PyTorch, .pkl for scikit-learn)
         model_type: 'pytorch' or 'sklearn'
     
     Returns:
@@ -101,145 +104,38 @@ def load_model(model_path, model_type):
     if model_type == 'pytorch':
         import torch
         
-        # Load the file onto the selected device (default cpu)
+        # Load the full model object
         map_location = DEVICE if DEVICE is not None else 'cpu'
-        loaded_obj = torch.load(model_path, map_location=map_location)
+        model = torch.load(model_path, map_location=map_location, weights_only=False)
         
-        # Check if it's a full model or a state_dict
-        if isinstance(loaded_obj, nn.Module):
-            # Full model was saved
-            model = loaded_obj
-            print("Loaded full PyTorch model")
-        elif isinstance(loaded_obj, dict):
-            # State dict was saved - detect architecture from filename
-            filename = os.path.basename(model_path).lower()
-            print(f"Detected state_dict, detecting architecture from filename...")
-            
-            # Detect architecture based on filename
-            if 'gru' in filename:
-                print("Instantiating GRU architecture...")
-                # Detect number of GRU layers from state dict keys
-                num_layers = 0
-                hidden_dim = 128  # default
-                for key in loaded_obj.keys():
-                    if key.startswith('gru.weight_ih_l'):
-                        layer_idx = int(key.split('_l')[1])
-                        num_layers = max(num_layers, layer_idx + 1)
-                        # Extract hidden_dim from weight shape
-                        # weight_ih shape is (3*hidden_dim, input_dim) for GRU
-                        weight_shape = loaded_obj[key].shape
-                        hidden_dim = weight_shape[0] // 3
-                num_layers = max(num_layers, 1)  # At least 1 layer
-                print(f"Detected {num_layers} GRU layers with hidden_dim={hidden_dim}")
-                model = GRU(input_dim=9, hidden_dim=hidden_dim, num_layers=num_layers, output_dim=3)
-            elif 'mlp' in filename:
-                # Detect input dimension from filename (sliding window)
-                input_dim = 9  # default
-                window_size = 1  # default
-                if 'win5' in filename or 'window5' in filename:
-                    input_dim = 33  # 5*6 + 3
-                    window_size = 5
-                    print(f"Detected sliding window size 5 from filename")
-                elif 'win' in filename or 'window' in filename:
-                    # Try to extract window size from filename
-                    import re
-                    match = re.search(r'win(?:dow)?_?(\d+)', filename, re.IGNORECASE)
-                    if match:
-                        window_size = int(match.group(1))
-                        input_dim = window_size * 6 + 3
-                        print(f"Detected sliding window size {window_size} from filename")
-                
-                # If still default, try to infer from first layer weight shape
-                if input_dim == 9 and 'network.0.weight' in loaded_obj:
-                    detected_input_dim = loaded_obj['network.0.weight'].shape[1]
-                    if detected_input_dim != 9:
-                        input_dim = detected_input_dim
-                        window_size = (input_dim - 3) // 6
-                        print(f"Detected input_dim={input_dim} from weight shape (window_size={window_size})")
-                
-                print(f"Using input_dim={input_dim}")
-                
-                print(f"Using input_dim={input_dim}")
-                print("Instantiating MLP architecture...")
-                # Detect all hidden dimensions from state dict
-                # Look for LINEAR layers only (indices 0, 2, 4, 6, 8 if using BN/Dropout, or 0, 1, 2... if not)
-                hidden_dims = []
-                linear_indices = []
-                try:
-                    for key in loaded_obj.keys():
-                        if key.startswith('network.') and '.weight' in key:
-                            # Extract layer index
-                            idx = int(key.split('.')[1])
-                            if idx not in linear_indices:
-                                linear_indices.append(idx)
-                    
-                    linear_indices = sorted(set(linear_indices))
-                    
-                    # Check if BatchNorm layers are present (even indices would be BN if using BN/ReLU/Dropout pattern)
-                    has_batchnorm = any(f'network.{i}.running_mean' in loaded_obj for i in range(1, 20))
-                    
-                    # If no BN, linear indices are consecutive (0, 1, 2, ...)
-                    # If BN, linear indices skip by 4 (0, 4, 8, ...) or by 2 (0, 2, 4, ...)
-                    if not has_batchnorm:
-                        # Simple linear network: consecutive indices
-                        for idx in linear_indices[:-1]:  # All but the last (output) layer
-                            weight = loaded_obj[f'network.{idx}.weight']
-                            hidden_dims.append(weight.shape[0])
-                    else:
-                        # Network with BN/ReLU/Dropout: indices are 0, 2, 4, 6, 8... (or 0, 4, 8...)
-                        # Hidden dims are the output dims of hidden layers (all but last)
-                        for idx in linear_indices[:-1]:
-                            weight = loaded_obj[f'network.{idx}.weight']
-                            hidden_dims.append(weight.shape[0])
-                    
-                    if not hidden_dims:
-                        hidden_dims = [256, 128, 64, 32]  # fallback default
-                except Exception as e:
-                    print(f"Error detecting hidden dims: {e}")
-                    hidden_dims = [256, 128, 64, 32]  # fallback default
-                
-                print(f"Detected hidden_dims={hidden_dims}, has_batchnorm={has_batchnorm}")
-                
-                # Create MLP WITHOUT batchnorm/dropout if the saved model doesn't have them
-                if has_batchnorm:
-                    model = MLP(input_dim=input_dim, hidden_dims=hidden_dims, output_dim=3)
+        if not isinstance(model, nn.Module):
+            raise ValueError(
+                f"Expected a full PyTorch nn.Module, got {type(model)}. "
+                f"Only .pt files with full model objects are supported. "
+                f"Please retrain and save models using torch.save(model, path)."
+            )
+        
+        print(f"Loaded full PyTorch model: {model.__class__.__name__}")
+        
+        # Extract window_size if it's a windowed MLP model
+        # For MLP models, check the input dimension to infer window size
+        if hasattr(model, 'network') and len(model.network) > 0:
+            first_layer = model.network[0]
+            if isinstance(first_layer, nn.Linear):
+                input_dim = first_layer.in_features
+                # input_dim = window_size * 6 + 3
+                if input_dim > 9:
+                    window_size = (input_dim - 3) // 6
+                    model.window_size = window_size
+                    print(f"Detected window_size={window_size} from input_dim={input_dim}")
                 else:
-                    # Create a version without BN and dropout
-                    class SimpleMLP(nn.Module):
-                        def __init__(self, input_dim=9, hidden_dims=[128, 64], output_dim=3):
-                            super(SimpleMLP, self).__init__()
-                            layers = []
-                            prev_dim = input_dim
-                            for hidden_dim in hidden_dims:
-                                layers.extend([
-                                    nn.Linear(prev_dim, hidden_dim),
-                                    nn.ReLU()
-                                ])
-                                prev_dim = hidden_dim
-                            layers.append(nn.Linear(prev_dim, output_dim))
-                            self.network = nn.Sequential(*layers)
-                        
-                        def forward(self, x):
-                            return self.network(x)
-                    
-                    model = SimpleMLP(input_dim=input_dim, hidden_dims=hidden_dims, output_dim=3)
-                
-                # Attach window_size as model attribute for later use
-                model.window_size = window_size
-            else:
-                # Default to MLP if architecture cannot be determined
-                print("Architecture not detected in filename, defaulting to MLP...")
-                # Try to infer input_dim from first layer weight
-                input_dim = 9
-                if 'network.0.weight' in loaded_obj:
-                    input_dim = loaded_obj['network.0.weight'].shape[1]
-                    print(f"Detected input_dim={input_dim} from weight shape")
-                model = MLP(input_dim=input_dim, hidden_dims=[128, 64], output_dim=3)
-            
-            model.load_state_dict(loaded_obj)
-            print(f"Loaded state_dict")
+                    model.window_size = 1
+        elif hasattr(model, 'gru'):
+            # GRU models always use window_size=1
+            model.window_size = 1
         else:
-            raise ValueError(f"Unknown PyTorch save format. Expected nn.Module or dict, got {type(loaded_obj)}")
+            # Default to window_size=1
+            model.window_size = 1
         
         model.eval()
         if DEVICE is not None:
@@ -305,7 +201,7 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
     """
     List all available model files:
     - results/scikit_learn_baseline/models/ for .pkl (scikit-learn)
-    - results/pytorch_comparison/models/ for .pt/.pth (PyTorch comparisons)
+    - results/pytorch_comparison/models/ for .pt (PyTorch comparisons)
     
     Returns:
         List of tuples (model_name, filepath, model_type)
@@ -324,8 +220,6 @@ def list_available_models(models_dir: str = SKLEARN_MODELS_DIR):
     if os.path.exists(pytorch_dir):
         pt_files = glob.glob(os.path.join(pytorch_dir, '*.pt'))
         models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pt_files)])
-        pth_files = glob.glob(os.path.join(pytorch_dir, '*.pth'))
-        models.extend([(os.path.basename(f), f, 'pytorch') for f in sorted(pth_files)])
     
     return sorted(models)
 
@@ -1252,7 +1146,7 @@ def main():
             print(f"  python scripts/closed_loop_eval.py --model-path \"{available[0][1]}\" --single-model")
         else:
             print("No models found in results/models/")
-            print("Expected file types: .pkl (scikit-learn), .pt/.pth (PyTorch)")
+            print("Expected file types: .pkl (scikit-learn), .pt (PyTorch)")
         return
     
     # Default behavior: evaluate ALL models unless --single-model is specified
@@ -1260,7 +1154,7 @@ def main():
         available = list_available_models(SKLEARN_MODELS_DIR)
         if not available:
             print("No models found in results/scikit_learn_baseline/models/")
-            print("Expected file types: .pkl (scikit-learn), .pt/.pth (PyTorch)")
+            print("Expected file types: .pkl (scikit-learn), .pt (PyTorch)")
             return
         
         print(f"\n{'='*80}")
@@ -1300,7 +1194,7 @@ def main():
         # Auto-detect from file extension
         if args.model_path.endswith('.pkl'):
             args.controller_type = 'sklearn'
-        elif args.model_path.endswith('.pt') or args.model_path.endswith('.pth'):
+        elif args.model_path.endswith('.pt'):
             args.controller_type = 'pytorch'
         else:
             parser.error("Cannot auto-detect model type from extension. Please specify --controller-type")
