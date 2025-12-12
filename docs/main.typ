@@ -6,7 +6,7 @@
 #show: ieee.with(
   title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators],
   abstract: [
-    While Model Predictive Control (MPC) provides strong stability and robustness, it imposes a significant computational burden on real-time systems and resource-constrained devices. This paper investigates the application of Behavior Cloning to approximate MPC policies for the real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining Inverse Kinematics (IK) with MPC and evaluate a spectrum of neural network architectures, ranging from classical regression algorithms to complex deep learning models including Deep MLPs, RNNs, and Transformers to derive computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and the trade-offs inherent in different architectural choices. Our empirical study employs both online and offline evaluations to assess performance regarding accuracy, computational efficiency, and fidelity to the original MPC policy.
+    While Model Predictive Control (MPC) provides strong stability and robustness, it imposes a significant computational burden on real-time systems and resource-constrained devices. This paper investigates the application of Behavior Cloning to approximate MPC policies for the real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining Inverse Kinematics (IK) with MPC and evaluate a spectrum of neural network architectures, ranging from classical regression algorithms to complex deep learning models including Deep MLPs and RNNs, to derive computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and the trade-offs inherent in different architectural choices. Our empirical study employs both online and offline evaluations to assess performance regarding accuracy, computational efficiency, and fidelity to the original MPC policy. Our results demonstrate that Behavior Cloning can effectively reduce the computational burden of MPC policies for 3-DOF robotic manipulators. However, when deployed in simulation environments, the learned policies may not generalize well to real-world scenarios due to differences in dynamics and noise. Further research is needed to address these challenges and improve the generalization capabilities of Behavior Cloning for MPC policies.
   ],
   authors: (
     (
@@ -158,11 +158,11 @@ After generation, the dataset is stored in an episode-based format within a HDF5
 This hierarchical format preserves the temporal integrity of each trial, allowing us to process the data differently depending on the model architecture. The raw data is loaded via a custom MPCDataset class, which constructs the input feature vector $x$ by concatenating the state ($RR^6$) and the target ($RR^3$), resulting in a 9-dimensional input vector.
 
 #figure(
-  image("figures/random_episode.png", width: 80%),
+  image("figures/random_episode.png", width: 70%),
   caption: [Visualization of a random episode],
 )<fig:random_episode>
 
-Depending on the learning algorithm, the data is processed in two different ways according to the model architecture.
+Depending on the learning algorithm, the data is processed differently according to the model architecture.
 
 === Flat Formatting
 
@@ -184,6 +184,16 @@ $
 
 Where $E$ is the number of episodes and $T$ is the number of timesteps per episode.
 
+=== Sliding Window Formatting
+
+To approximate a recurrent structure with our MLP architecture, we augment each time step with its previous $W$ timesteps. This injects short-term memory into an otherwise i.i.d. formulation.
+
+For each timestep $t$, we create a new input vector $X_"seq"_{t}$ by concatenating the current state $X_{t}$ with the previous $W$ states $X_{t-1}, X_{t-2}, ..., X_{t-W}$.
+
+$
+  X_"seq" in RR^(N times (W dot 6 + 3)), quad Y_"seq" in RR^(N)
+$
+
 == Data Preprocessing
 
 Our goal is to develop a robust and reliable controller that can handle uncertainties and disturbances in the system. To this end, we introduce small Gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise simulates real-world conditions such as sensor noise, actuator noise, and environmental disturbances. Because the data generation pipeline can produce an arbitrary number of samples, we collect a large dataset for training and increase the number of samples until the validation loss plateaus or computational limits are reached.
@@ -191,7 +201,7 @@ Our goal is to develop a robust and reliable controller that can handle uncertai
 For this purpose we ran a simple experiment with both SVR and MLP models from `Scikit-learn` and compared their performance while increasing the number of samples progressively.
 
 #figure(
-  image("figures/dataset_scale_plot.png", width: 90%),
+  image("figures/dataset_scale_plot.png", width: 80%),
   caption: [MSE vs number of samples (5 trials per model)],
 )<fig:dataset_scale_plot>
 
@@ -232,10 +242,6 @@ $
   h_t = "RNN"(x_t, h_(t-1)), quad pi_theta(X) = "Linear"(h_t)
 $
 
-== Transformer Architecture
-
-If time permits, we will investigate a Transformer model. Unlike RNNs, the multi-head self-attention mechanisms used to weigh the importance of different past timesteps may result in better performance due to their ability to capture long-range dependencies.
-
 = Evaluation Methodology
 
 We evaluated the learned policies using a combination of offline and online metrics:
@@ -243,33 +249,7 @@ We evaluated the learned policies using a combination of offline and online metr
 == Offline Metrics
 We used Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
 
-Comparison off learning with MAE as Loss and MSE as Loss
 
-#table(
-  columns: (1.5fr, 1.5fr, 1.5fr),
-  align: center + horizon,
-  table.header(
-    [#strong[Model Config]],
-    [#strong[MSE (Mean $plus.minus$ Std)]],
-    [#strong[MAE (Mean $plus.minus$ Std)]],
-  ),
-  // MLP_mse
-  [MLP_mse],
-  [$0.1460 plus.minus 0.0522$],
-  [$0.1474 plus.minus 0.0126$],
-  // MLP_mae
-  [MLP_mae],
-  [$0.2017 plus.minus 0.0455$],
-  [$0.0892 plus.minus 0.0078$],
-  // GRU_mse
-  [GRU_mse],
-  [$1.1442 plus.minus 0.1441$],
-  [$0.2581 plus.minus 0.0138$],
-  // GRU_mae
-  [GRU_mae],
-  [$2.1821 plus.minus 0.1001$],
-  [$0.3570 plus.minus 0.0101$],
-)
 
 $
   "MAE"_j = 1/N sum_(i=0)^n abs(tau_"MPC,i,j" - pi_theta (X_i)_j)
@@ -303,7 +283,7 @@ $
 
 == Regression Baseline
 
-For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. The dataset consists of 1715 episodes, which were flattened to remove temporal dependencies, resulting in a total of $N = 85,789$ samples. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
+For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. As discussed before, we used only a subset of the whole dataset for a total of $35000$ samples, splitted in $80%$ for training and $20%$ for testing. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
 
 #let model_col(name) = strong(name)
 #let vector_val(v) = text(size: 0.7em, $mono([#v])$)
@@ -342,11 +322,92 @@ The results highlight the inherent non-linearity of the inverse dynamics mapping
   caption: [Mean Squared Error per Torque],
 )<fig:mse_per_torque>
 
-== Custom MLP
-== Time Series Models
+== Loss comparison
+
+In this section, we compare performance of training models with two different loss functions. For this part we used a PyTorch implementation of the MLP regressor and of a GRU RNNs. @table:loss_comparison summarizes the results of our experiments where the name of the model configuration is the name of the model and the loss function used for training.
+
+#let model_col(name) = strong(name)
+#figure(
+  table(
+    columns: (auto, auto, auto),
+    inset: 5pt,
+    align: (col, row) => (if col == 0 { left } else { center + horizon }),
+    stroke: (x, y) => (
+      top: if y == 0 { 1pt } else if y == 1 { 0.5pt } else { 0pt },
+      bottom: 1pt,
+    ),
+    table.header(
+      [*Model Config*],
+      [*MSE (Mean $plus.minus$ Std)*],
+      [*MAE (Mean $plus.minus$ Std)*]
+    ),
+
+    model_col("MLP_mse"), $0.1460 plus.minus 0.0522$, $0.1474 plus.minus 0.0126$,
+    model_col("MLP_mae"), $0.2017 plus.minus 0.0455$, $0.0892 plus.minus 0.0078$,
+    model_col("GRU_mse"), $1.1442 plus.minus 0.1441$, $0.2581 plus.minus 0.0138$,
+    model_col("GRU_mae"), $2.1821 plus.minus 0.1001$, $0.3570 plus.minus 0.0101$,
+  ),
+  caption :[Loss Comparison]
+)<table:loss_comparison>
+
+After this experiment, we decided to use the Mean Squared Error (MSE) loss function for our experiments because models trained with MSE consistently achieved lower test error and lower variance across runs, as shown in Table @table:loss_comparison. In particular, the MLP_mse and GRU_mse configurations outperformed their MAE-trained counterparts in terms of MSE, which was our primary performance metric for policy imitation.
+
+== Hyperparameters Tuning of MLP and GRU
+
+In this section, we present the offline evaluation metrics collected during the training of MLP and GRU models to determine the optimal architecture for our task.
+
+=== Experimental Setup
+To ensure the reliability of our results, each model configuration was trained and evaluated 5 times. The dataset was split into training (80%), validation (10%), and testing (10%) sets. The results presented in @fig:architecture_comparison reflect the Mean Squared Error (MSE) on the test set.
+
+We monitored validation loss throughout training to detect potential overfitting. No significant overfitting was observed in any of the experiments across the tested architectures and data augmentation strategies. As established in previous sections, the MLP models were trained on a subset of 35,000 timesteps, which was deemed sufficient for convergence, while the GRU models utilized the full dataset to capture temporal dependencies effectively.
+
+=== Tested Architectures
+We evaluated three variations of the Multi-Layer Perceptron (MLP) and four variations of the Gated Recurrent Unit (GRU) network. The specific hyperparameters for each configuration are detailed in @tab:model_configs.
+
+#figure(
+  table(
+    columns: (auto, auto, auto),
+      inset: 5pt,
+      align: (col, row) => (if col == 0 { left } else { center + horizon }),
+      stroke: (x, y) => (
+        top: if y == 0 { 1pt } else if y == 1 { 0.5pt } else { 0pt },
+        bottom: 1pt,
+      ),
+    table.header(
+      [*Model Name*], [*Type*], [*Parameters*]
+    ),
+    [MLP_Small],   [MLP], [Hidden Layers: [64, 32]],
+    [MLP_Medium],  [MLP], [Hidden Layers: [128, 64]],
+    [MLP_Deep],    [MLP], [Hidden Layers: [256, 128, 64, 32]],
+    [GRU_Shallow], [GRU], [Hidden Dim: 64, Layers: 1],
+    [GRU_Medium],  [GRU], [Hidden Dim: 128, Layers: 2],
+    [GRU_Deep],    [GRU], [Hidden Dim: 128, Layers: 4],
+    [GRU_Wide],    [GRU], [Hidden Dim: 256, Layers: 2],
+  ),
+  caption: [Summary of model architectures and hyperparameters used during tuning.]
+) <tab:model_configs>
+
+=== Results Analysis
+#figure(
+  image("figures/architecture_comparison.png", width: 80%),
+  caption :[Architecture Comparison (Metric: MSE, Lower is better). Error bars represent the standard deviation across 5 runs.]
+) <fig:architecture_comparison>
+
+The performance comparison in @fig:architecture_comparison highlights distinct trends between the MLP and GRU architectures:
+
++ *MLP Superiority:* In this specific experimental setting, the MLP architectures consistently outperformed the GRU variants. The `MLP_Deep` configuration achieved the lowest Mean MSE overall (approximately 0.05).
++ *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with `MLP_Deep` notably outperforming `MLP_Medium` and `MLP_Small`.
++ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. The `GRU_Shallow` model performed worst among all tested configurations (MSE $approx$ 2.7). However, increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved comparable performance (MSE $approx$ 0.5), significantly improving upon the shallower variants, though still lagging behind the best MLP.
+
+Based on these results, `MLP_Deep` demonstrates the strongest predictive capability and stability on the test set.
+
 == Online evaluation (MuJoCo)
 
-#pagebreak()
+Here you should just present the results of the online evaluation with appropriate figures.
+
+== Discussion
+
+Here Dexter you should talk about the difference between offline results / online results and conclude.
 
 = Future Work
 
