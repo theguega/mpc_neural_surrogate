@@ -283,7 +283,7 @@ $
 
 == Regression Baseline
 
-For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. As discussed before, we used only a subset of the whole dataset for a total of $35000$ samples, splitted in $80%$ for training and $20%$ for testing. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
+For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. As discussed before, we used only a subset of the whole dataset for a total of $35000$ samples, split into $80%$ for training and $20%$ for testing. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
 
 #let model_col(name) = strong(name)
 #let vector_val(v) = text(size: 0.7em, $mono([#v])$)
@@ -362,7 +362,7 @@ To ensure the reliability of our results, each model configuration was trained a
 We monitored validation loss throughout training to detect potential overfitting. No significant overfitting was observed in any of the experiments across the tested architectures and data augmentation strategies. As established in previous sections, the MLP models were trained on a subset of 35,000 timesteps, which was deemed sufficient for convergence, while the GRU models utilized the full dataset to capture temporal dependencies effectively.
 
 === Tested Architectures
-We evaluated three variations of the Multi-Layer Perceptron (MLP) and four variations of the Gated Recurrent Unit (GRU) network. The specific hyperparameters for each configuration are detailed in @tab:model_configs.
+We evaluated four variations of the Multi-Layer Perceptron (MLP) and four variations of the Gated Recurrent Unit (GRU) network. The specific hyperparameters for each configuration are detailed in @tab:model_configs.
 
 #figure(
   table(
@@ -376,16 +376,19 @@ We evaluated three variations of the Multi-Layer Perceptron (MLP) and four varia
     table.header(
       [*Model Name*], [*Type*], [*Parameters*]
     ),
-    [MLP_Small],   [MLP], [Hidden Layers: [64, 32]],
-    [MLP_Medium],  [MLP], [Hidden Layers: [128, 64]],
-    [MLP_Deep],    [MLP], [Hidden Layers: [256, 128, 64, 32]],
-    [GRU_Shallow], [GRU], [Hidden Dim: 64, Layers: 1],
-    [GRU_Medium],  [GRU], [Hidden Dim: 128, Layers: 2],
-    [GRU_Deep],    [GRU], [Hidden Dim: 128, Layers: 4],
-    [GRU_Wide],    [GRU], [Hidden Dim: 256, Layers: 2],
+    [MLP_Small],        [MLP], [Hidden Layers: [64, 32]],
+    [MLP_Medium],       [MLP], [Hidden Layers: [128, 64]],
+    [MLP_Deep],         [MLP], [Hidden Layers: [256, 128, 64, 32]],
+    [MLP_Deep_Scaled],  [MLP], [Hidden Layers: [512, 256, 128, 64]],
+    [GRU_Shallow],      [GRU], [Hidden Dim: 64, Layers: 1],
+    [GRU_Medium],       [GRU], [Hidden Dim: 128, Layers: 2],
+    [GRU_Deep],         [GRU], [Hidden Dim: 128, Layers: 4],
+    [GRU_Wide],         [GRU], [Hidden Dim: 256, Layers: 2],
   ),
   caption: [Summary of model architectures and hyperparameters used during tuning.]
 ) <tab:model_configs>
+
+To approximate the temporal awareness, we also implemented Sliding Window variants (W = 5) across the MLP variants: MLP_Win5_Small, MLP_Win5_Medium, MLP_Win5_Deep, and MLP_Win5_Deep_Scaled
 
 === Results Analysis
 #figure(
