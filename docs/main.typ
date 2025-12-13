@@ -318,7 +318,7 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
 The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
 
 #figure(
-  image("figures/mse_per_torque_without_linear.png", width: 90%),
+  image("figures/mse_per_torque_without_linear.png", width: 100%),
   caption: [Mean Squared Error per Torque],
 )<fig:mse_per_torque>
 
@@ -350,7 +350,7 @@ In this section, we compare performance of training models with two different lo
   caption :[Loss Comparison]
 )<table:loss_comparison>
 
-After this experiment, we decided to use the Mean Squared Error (MSE) loss function for our experiments because models trained with MSE consistently achieved lower test error and lower variance across runs, as shown in @table:loss_comparison. In particular, the MLP_mse and GRU_mse configurations outperformed their MAE-trained counterparts in terms of MSE, which was our primary performance metric for policy imitation.
+Following this experiment, we adopted the MSE loss function for our experiments because models trained with it consistently achieved lower test error and lower variance across runs, as shown in @table:loss_comparison. In particular, the MLP_mse and GRU_mse configurations outperformed their MAE-trained counterparts in terms of MSE, which was our primary performance metric for policy imitation.
 
 == Hyperparameters Tuning of MLP and GRU
 
@@ -413,7 +413,7 @@ To validate these offline findings, we conducted a comprehensive online evaluati
 While Scikit-learn baselines failed to control the robot ($<35%$ success rate), the PyTorch-based architectures produced results comparable to the MPC.
 
 #figure(
-  image("figures/closed_loop_success_thresholds.png", width: 80%),
+  image("figures/closed_loop_success_thresholds.png", width: 100%),
   caption :[Comparison of closed-loop success rates across different error tolerances ($epsilon$). The bar graphs represent the mean values across 5 runs.]
 ) <fig:success_thresholds>
 
@@ -423,7 +423,7 @@ While Scikit-learn baselines failed to control the robot ($<35%$ success rate), 
 We compared the distribution of solve times between the MPC and MLP_Deep.
 
 #figure(
-  image("figures/mpc_mlp_solvetime_boxplot.png", width: 60%),
+  image("figures/mpc_mlp_solvetime_boxplot.png", width: 65%),
   caption :[Distribution of Inference Latency per Control Step.]
 ) <fig:solvetime_boxplot>
 

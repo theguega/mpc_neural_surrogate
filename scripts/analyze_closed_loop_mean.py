@@ -120,7 +120,7 @@ def select_top_with_mpc(df_metric: pd.DataFrame, metric: str, n: int = 5, ascend
 
 # 1. Success Rate (all thresholds, higher is better)
 top_success = select_top_with_mpc(df, 'Success Rate @0.02m', n=5, ascending=False).copy()
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=(10, 4.5))
 x_pos = np.arange(len(top_success))
 width = 0.25
 
@@ -133,7 +133,7 @@ ax.bar(x_pos, top_success['Success Rate @0.03m (%)'], width, label='@0.03m (mode
 ax.bar(x_pos + width, top_success['Success Rate @0.05m (%)'], width, label='@0.05m (relaxed)', color='#27ae60')
 
 ax.set_xticks(x_pos)
-ax.set_xticklabels(top_success['Model'], rotation=45, ha='right')
+ax.set_xticklabels(top_success['Model'], ha='center')
 ax.set_ylabel('Success Rate (%)')
 ax.set_title('Top 5 - Success Rate (All Thresholds)', fontweight='bold')
 ax.set_ylim([0, 100])
