@@ -28,19 +28,19 @@
 
 = Introduction
 
-Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks, with their diverse architectures, offer a promising and computationally efficient alternative for approximating MPC policies @gonzalez2024neuralnetworksfastoptimisation. We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector (EE) to reach a 3D cartesian target position within the robot's reachable workspace. Inspired by the recent usage of imitation learning for complex controls @deAPorto2025, we present a complete data generation pipeline for collecting high-quality demonstrations of the desired behavior and an empirical evaluation of both feedforward and recurrent neural networks for policy learning. Our experiment focuses on minimizing the control error and testing the ability of the learned policy to generalize in the simulation environment.
+Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks, with their diverse architectures, offer a promising and computationally efficient alternative for approximating MPC policies @gonzalez2024neuralnetworksfastoptimisation. We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector to reach a 3D cartesian target position within the robot's reachable workspace. Inspired by the recent usage of imitation learning for complex controls @deAPorto2025, we present a complete data generation pipeline for collecting high-quality demonstrations of the desired behavior and an empirical evaluation of both feedforward and recurrent neural networks for policy learning. Our experiment focuses on minimizing the control error and testing the ability of the learned policy to generalize in the simulation environment.
 
 = Problem Formulation
 
 == System Description
 
-We consider a 3-degree-of-freedom (3-DOF) robotic manipulator defined by generalized coordinates $q = [q_1, q_2, q_3]^T in RR^3$, representing joint angles, and their time derivatives $dot(q) in RR^3$. The full observable state at discrete time step $k$ is
+We consider a 3-DOF robotic manipulator defined by generalized coordinates $q = [q_1, q_2, q_3]^T in RR^3$, representing joint angles, and their time derivatives $dot(q) in RR^3$. The full observable state at discrete time step $k$ is
 
 $
   x_k = [q_k^T, dot(q)_k^T]^T in RR^6
 $
 
-The manipulator operates in a MuJoCo simulation environment (@fig:3dof-arm-mujoco) governed by rigid-body dynamics with gravity compensation. The control objective is to drive the end-effector (EE) to track randomly sampled, reachable 3D Cartesian target positions $p_"des" in RR^3$ within the robot's workspace $cal(W) subset RR^3$.
+The manipulator operates in a MuJoCo simulation environment (@fig:3dof-arm-mujoco) governed by rigid-body dynamics with gravity compensation. The control objective is to drive the end-effector to track randomly sampled, reachable 3D Cartesian target positions $p_"des" in RR^3$ within the robot's workspace $cal(W) subset RR^3$.
 
 #grid(
   columns: 2,
@@ -61,7 +61,7 @@ The manipulator operates in a MuJoCo simulation environment (@fig:3dof-arm-mujoc
 
 = Baseline Controller: MPC with Inverse Kinematics
 
-Our baseline controller uses a hierarchical architecture combining an Inverse Kinematics (IK) module and a Model Predictive Control (MPC) module. The IK module computes the joint angles required to achieve the desired end-effector position, while the MPC module optimizes the joint velocities to minimize the control error.
+Our baseline controller uses a hierarchical architecture combining an Inverse Kinematics (IK) module and a MPC module. The IK module computes the joint angles required to achieve the desired end-effector position, while the MPC module optimizes the joint velocities to minimize the control error.
 
 == Inverse Kinematics Formulation
 
@@ -166,7 +166,7 @@ Depending on the learning algorithm, the data is processed differently according
 
 === Flat Formatting
 
-For non-sequential algorithms (e.g., MLPs, Random Forests), temporal dependencies are discarded to maximize sample efficiency. We treat every timestep t from every episode as an independent sample (i.i.d).
+For non-sequential algorithms (e.g., MLPs, Random Forests), temporal dependencies are discarded to maximize sample efficiency. We treat every timestep $t$ from every episode as an independent sample (i.i.d).
 
 $
   X_"flat" in RR^(N times 9), quad Y_"flat" in RR^(N times 3)
@@ -226,7 +226,7 @@ As baselines, we evaluated several models from the scikit-learn library to estab
 == Custom Multi-Layer Perceptron (MLP)
 
 We implemented a custom feedforward network to explore the impact of model capacity on cloning accuracy. This model processes the flat input vector through a series of fully connected linear layers with ReLU activations. We conducted an architectural search by varying:
-  - Depth: Number of hidden layers.
+  - Depth: Number of hidden layers
   - Width: Number of neurons per layer
 This memory-less architecture captures and learns directly the mapping from the current state and target to the required control action.
 
@@ -247,7 +247,7 @@ $
 We evaluated the learned policies using a combination of offline and online metrics:
 
 == Offline Metrics
-We used Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
+We used MAE and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
 
 
 
@@ -283,7 +283,7 @@ $
 
 == Regression Baseline
 
-For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. As discussed before, we used only a subset of the whole dataset for a total of $35000$ samples, split into $80%$ for training and $20%$ for testing. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across Mean Squared Error (MSE), Mean Absolute Error (MAE), Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
+For our regression baseline with scikit-learn, we evaluated several standard regression algorithms using the collected offline dataset. As discussed before, we used only a subset of the whole dataset for a total of $35000$ samples, split into $80%$ for training and $20%$ for testing. The input feature space $X in RR^9$ consists of the robot's current state and target coordinates, while the output target $Y in RR^3$ corresponds to the applied joint actions (torques). The data was partitioned into a training set ($80%$) and a test set ($20%$) via random shuffling. To ensure the statistical significance of the reported metrics, each model was trained and evaluated over 5 independent runs. @table:regression_baseline summarizes the performance across MSE, MAE, Explained Variance, and Directional Accuracy. We also tried scaling our features using Scikit-Learn's StandardScaler, which did not significantly improve performance.
 
 #let model_col(name) = strong(name)
 #let vector_val(v) = text(size: 0.7em, $mono([#v])$)
@@ -315,7 +315,7 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
   caption: [Comparison of regression algorithms on the validation set (averaged over 5 runs).]
 )<table:regression_baseline>
 
-The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall Mean Squared Error ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
+The results highlight the inherent non-linearity of the inverse dynamics mapping. Linear Regression failed to capture the underlying relationship, exhibiting high variance across all torque dimensions. In contrast, non-linear methods performed significantly better. The MLP Regressor achieved the lowest overall MSE ($0.053$), indicating its superior capability in minimizing large control deviations, which is critical for preventing hardware damage. While KNN Regressor achieved the highest Directional Accuracy ($99.87%$) and lowest MAE, its higher MSE suggests it suffers from occasional large prediction errors (outliers). Finally, different SVM models with linear and radial basis function (RBF) kernels were evaluated. However, as mentioned in the documentation, RBF kernels cannot scale with that many samples, whereas linear kernels yielded poor performance.
 
 #figure(
   image("figures/mse_per_torque_without_linear.png", width: 100%),
@@ -357,7 +357,7 @@ Following this experiment, we adopted the MSE loss function for our experiments 
 In this section, we present the offline evaluation metrics collected during the training of MLP and GRU models to determine the optimal architecture for our task.
 
 === Experimental Setup
-To ensure the reliability of our results, each model configuration was trained and evaluated 5 times. The dataset was split into training (80%), validation (10%), and testing (10%) sets. The results presented in @fig:architecture_comparison reflect the Mean Squared Error (MSE) on the test set.
+To ensure the reliability of our results, each model configuration was trained and evaluated 5 times. The dataset was split into training (80%), validation (10%), and testing (10%) sets. The results presented in @fig:architecture_comparison reflect the MSE on the test set.
 
 We monitored validation loss throughout training to detect potential overfitting. No significant overfitting was observed in any of the experiments across the tested architectures and data augmentation strategies. As established in previous sections, the MLP models were trained on a subset of 35,000 timesteps, which was deemed sufficient for convergence, while the GRU models utilized the full dataset to capture temporal dependencies effectively.
 
@@ -388,7 +388,7 @@ We evaluated four variations of the Multi-Layer Perceptron (MLP) and four variat
   caption: [Summary of model architectures and hyperparameters used during tuning.]
 ) <tab:model_configs>
 
-To approximate temporal awareness, we also implemented Sliding Window (SW) variants (W=5) across the four MLP architectures, using the same hidden layer parameters.
+To approximate temporal awareness, we also implemented Sliding Window variants (W=5) across the four MLP architectures, using the same hidden layer parameters.
 
 === Results Analysis
 #figure(
@@ -431,7 +431,7 @@ The MLP_Deep policy achieved a mean solve time of 1.102$plus.minus$0.614ms. This
 
 == Discussion
 
-Our results show a strong alignment between offline regression metrics and closed-loop control performance. The low offline Mean Squared Error (MSE $approx$ 0.5) successfully translated to a robust online policy, achieving a 84.98% success rate under relaxed tolerances. The mean final tracking error of 2.9cm is not a failure of generalization, but rather a direct reflection of the resolution limit inherent in the offline data. The neural network successfully learned the expert's global trajectory, but lacks the gradient-based feedback required to eliminate the final centimeter of error.
+Our results show a strong alignment between offline regression metrics and closed-loop control performance. The low offline MSE $approx$ 0.5 successfully translated to a robust online policy, achieving a 84.98% success rate under relaxed tolerances. The mean final tracking error of 2.9cm is not a failure of generalization, but rather a direct reflection of the resolution limit inherent in the offline data. The neural network successfully learned the expert's global trajectory, but lacks the gradient-based feedback required to eliminate the final centimeter of error.
 
 Crucially, the failure of Sliding Window and GRU models to outperform static MLPs confirms that for this scenario, temporal history is redundant. This implies that the dynamics for our specific setup have the Markov property and are fully captured by the current state ($q, dot(q)$).
 
