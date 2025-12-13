@@ -138,53 +138,20 @@ fig.legend(handles=legend_elements, loc='upper right')
 fig.savefig('results/closed_loop/plots/indiv_runs/closed_loop_solvetime.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop/plots/indiv_runs/closed_loop_solvetime.png")
 
- # 3b. Solve Time distribution: MPC vs MLP_Deep (log scale, box + jitter)
- def _base_model(name: str) -> str:
-     name_lower = (name or '').lower()
-     if 'mlp_deep' in name_lower:
-         return 'MLP_Deep'
-     if 'mpc' in name_lower:
-         return 'MPC'
-     return name
-
- subset = df.copy()
- subset['ModelBase'] = subset['Model'].apply(_base_model)
- solve_box = subset[subset['ModelBase'].isin(['MPC', 'MLP_Deep'])]
- if not solve_box.empty:
-     fig, ax = plt.subplots(figsize=(6, 6))
-     data_box = []
-     labels = []
-     colors = []
-     jitter_x = []
-     jitter_y = []
-     jitter_c = []
-     rng = np.random.default_rng(42)
-     for label, color in [('MPC', '#e67e22'), ('MLP_Deep', '#2ecc71')]:
-         series = solve_box.loc[solve_box['ModelBase'] == label, 'Solve Time (ms)'].dropna()
-         if series.empty:
-             continue
-         data_box.append(series)
-         labels.append(label)
-         colors.append(color)
-         jitter_x.extend(len(series) * [label])
-         jitter_y.extend(series.tolist())
-         jitter_c.extend(len(series) * [color])
-     if data_box:
-         box = ax.boxplot(data_box, labels=labels, patch_artist=True, medianprops={'color': 'black'}, whis=1.5)
-         for patch, color in zip(box['boxes'], colors):
-             patch.set_facecolor(color)
-             patch.set_edgecolor('black')
-         # Add jittered points for visibility when spread is tiny
-         x_lookup = {lbl: i + 1 for i, lbl in enumerate(labels)}
-         jittered_x = [x_lookup[lbl] + rng.normal(0, 0.03) for lbl in jitter_x]
-         ax.scatter(jittered_x, jitter_y, alpha=0.4, color=jitter_c, edgecolor='black', linewidth=0.5, s=30)
-         ax.set_ylabel('Solve Time (ms)')
-         ax.set_title('Solve Time Distribution: MPC vs MLP_Deep (log scale)', fontweight='bold')
-         ax.set_yscale('log')
-         ax.grid(axis='y', alpha=0.3)
-         fig.tight_layout()
-         fig.savefig('results/closed_loop/plots/indiv_runs/closed_loop_solvetime_box_mpc_vs_mlpdeep.png', dpi=150, bbox_inches='tight')
-         print("Plot saved to results/closed_loop/plots/indiv_runs/closed_loop_solvetime_box_mpc_vs_mlpdeep.png")
+# 4. CPU Percent (lower is better)
+top_cpu = select_top_with_mpc(df, 'CPU Percent', n=5, ascending=True)
+fig, ax = plt.subplots(figsize=(8, 6))
+ax.bar(range(len(top_cpu)), top_cpu['CPU Percent'], color=color_map(top_cpu['Type']))
+ax.set_xticks(range(len(top_cpu)))
+ax.set_xticklabels(top_cpu['Model'], rotation=45, ha='right')
+ax.set_ylabel('CPU Utilization (%)')
+ax.set_ylim([0, top_cpu['CPU Percent'].max() + 1])
+ax.set_title('Top 5 - CPU Efficiency (Lower Better)', fontweight='bold')
+for i, (idx, row) in enumerate(top_cpu.iterrows()):
+    ax.text(i, row['CPU Percent'] + 0.1, f"{row['CPU Percent']:.2f}%", ha='center', va='bottom')
+ax.grid(axis='y', alpha=0.3)
+fig.legend(handles=legend_elements, loc='upper right')
+fig.savefig('results/closed_loop/plots/indiv_runs/closed_loop_cpu.png', dpi=150, bbox_inches='tight')
 print("Plot saved to results/closed_loop/plots/indiv_runs/closed_loop_cpu.png")
 
 # 4b. Wall Time (lower is better)
