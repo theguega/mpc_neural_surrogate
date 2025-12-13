@@ -310,3 +310,135 @@ print(top_walltime[['Model', 'Type', 'Wall Time (s)']].to_string(index=False))
 
 print("\nCPU UTILIZATION (Lower is Better)")
 print(top_cpu[['Model', 'Type', 'CPU Percent']].to_string(index=False))
+
+# Box plot: MPC vs MLP_Deep solve times
+print("\n" + "="*100)
+print("Creating box plot: MPC vs MLP_Deep solve times")
+print("="*100)
+
+# Collect per-episode solve times for MPC and MLP_Deep
+mpc_solve_times = []
+mlp_deep_solve_times = []
+
+for filepath in json_files:
+    with open(filepath, 'r') as f:
+        result = json.load(f)
+    
+    model_path = result.get('model_path', 'MPC')
+    model_name = os.path.splitext(os.path.basename(model_path))[0] if model_path else 'MPC'
+    model_base = canonical_model_name(model_name)
+    
+    # Extract per-episode solve times (convert to ms)
+    episode_metrics = result.get('episode_metrics', [])
+    
+    if model_base == 'MPC':
+        for episode in episode_metrics:
+            solve_time_ms = episode.get('mean_solve_time', 0) * 1000
+            mpc_solve_times.append(solve_time_ms)
+    elif model_base == 'MLP_Deep':
+        for episode in episode_metrics:
+            solve_time_ms = episode.get('mean_solve_time', 0) * 1000
+            mlp_deep_solve_times.append(solve_time_ms)
+
+print(f"Collected {len(mpc_solve_times)} MPC solve times")
+print(f"Collected {len(mlp_deep_solve_times)} MLP_Deep solve times")
+
+if mpc_solve_times and mlp_deep_solve_times:
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Create box plot
+    box_data = [mpc_solve_times, mlp_deep_solve_times]
+    bp = ax.boxplot(box_data, labels=['MPC', 'MLP_Deep'], patch_artist=True)
+    
+    # Color the boxes
+    bp['boxes'][0].set_facecolor('#e67e22')  # MPC color
+    bp['boxes'][1].set_facecolor('#2ecc71')  # PyTorch color
+    
+    ax.set_ylabel('Solve Time (ms)', fontweight='bold')
+    ax.set_title('MPC vs MLP_Deep: Solve Time Distribution', fontweight='bold')
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Add statistics text
+    mpc_median = np.median(mpc_solve_times)
+    mlp_median = np.median(mlp_deep_solve_times)
+    mpc_mean = np.mean(mpc_solve_times)
+    mlp_mean = np.mean(mlp_deep_solve_times)
+        
+    fig.tight_layout()
+    fig.savefig('results/closed_loop/plots/mean/closed_loop_solvetime_boxplot.png', dpi=150, bbox_inches='tight')
+    print("Box plot saved to results/closed_loop/plots/mean/closed_loop_solvetime_boxplot.png")
+    print(f"\nMPC Solve Time Statistics:")
+    print(f"  Median: {mpc_median:.3f}ms")
+    print(f"  Mean: {mpc_mean:.3f}ms")
+    print(f"  Std: {np.std(mpc_solve_times):.3f}ms")
+    print(f"  Min: {np.min(mpc_solve_times):.3f}ms")
+    print(f"  Max: {np.max(mpc_solve_times):.3f}ms")
+    
+    print(f"\nMLP_Deep Solve Time Statistics:")
+    print(f"  Median: {mlp_median:.3f}ms")
+    print(f"  Mean: {mlp_mean:.3f}ms")
+    print(f"  Std: {np.std(mlp_deep_solve_times):.3f}ms")
+    print(f"  Min: {np.min(mlp_deep_solve_times):.3f}ms")
+    print(f"  Max: {np.max(mlp_deep_solve_times):.3f}ms")
+    
+    print(f"\nSpeedup: {mpc_median/mlp_median:.1f}x (median), {mpc_mean/mlp_mean:.1f}x (mean)")
+else:
+    print("Warning: Could not find solve times for both MPC and MLP_Deep")
+
+# CPU Percent Analysis: MPC vs MLP_Deep
+print("\n" + "="*100)
+print("CPU Utilization Analysis: MPC vs MLP_Deep")
+print("="*100)
+
+# Collect per-episode CPU percent for MPC and MLP_Deep
+mpc_cpu_percent = []
+mlp_deep_cpu_percent = []
+
+for filepath in json_files:
+    with open(filepath, 'r') as f:
+        result = json.load(f)
+    
+    model_path = result.get('model_path', 'MPC')
+    model_name = os.path.splitext(os.path.basename(model_path))[0] if model_path else 'MPC'
+    model_base = canonical_model_name(model_name)
+    
+    # Extract per-episode CPU percent
+    episode_metrics = result.get('episode_metrics', [])
+    
+    if model_base == 'MPC':
+        for episode in episode_metrics:
+            cpu_pct = episode.get('cpu_percent', 0)
+            mpc_cpu_percent.append(cpu_pct)
+    elif model_base == 'MLP_Deep':
+        for episode in episode_metrics:
+            cpu_pct = episode.get('cpu_percent', 0)
+            mlp_deep_cpu_percent.append(cpu_pct)
+
+print(f"Collected {len(mpc_cpu_percent)} MPC CPU measurements")
+print(f"Collected {len(mlp_deep_cpu_percent)} MLP_Deep CPU measurements")
+
+if mpc_cpu_percent and mlp_deep_cpu_percent:
+    mpc_cpu_median = np.median(mpc_cpu_percent)
+    mlp_cpu_median = np.median(mlp_deep_cpu_percent)
+    mpc_cpu_mean = np.mean(mpc_cpu_percent)
+    mlp_cpu_mean = np.mean(mlp_deep_cpu_percent)
+    
+    print(f"\nMPC CPU Utilization Statistics:")
+    print(f"  Median: {mpc_cpu_median:.2f}%")
+    print(f"  Mean: {mpc_cpu_mean:.2f}%")
+    print(f"  Std: {np.std(mpc_cpu_percent):.2f}%")
+    print(f"  Min: {np.min(mpc_cpu_percent):.2f}%")
+    print(f"  Max: {np.max(mpc_cpu_percent):.2f}%")
+    
+    print(f"\nMLP_Deep CPU Utilization Statistics:")
+    print(f"  Median: {mlp_cpu_median:.2f}%")
+    print(f"  Mean: {mlp_cpu_mean:.2f}%")
+    print(f"  Std: {np.std(mlp_deep_cpu_percent):.2f}%")
+    print(f"  Min: {np.min(mlp_deep_cpu_percent):.2f}%")
+    print(f"  Max: {np.max(mlp_deep_cpu_percent):.2f}%")
+    
+    cpu_reduction_median = ((mpc_cpu_median - mlp_cpu_median) / mpc_cpu_median) * 100
+    cpu_reduction_mean = ((mpc_cpu_mean - mlp_cpu_mean) / mpc_cpu_mean) * 100
+    print(f"\nCPU Reduction: {cpu_reduction_median:.1f}% (median), {cpu_reduction_mean:.1f}% (mean)")
+else:
+    print("Warning: Could not find CPU percent for both MPC and MLP_Deep")

@@ -95,7 +95,7 @@ $
 
 == Model Predictive Control Formulation
 
-The MPC module is given the desired joint angles $q_"des" in RR^3$ from the IK module and computes optimal control torques $tau_"MPC"$ with a specified prediction horizon. We simplify the system dynamics for the MPC formulation by assuming unit inertia and neglecting Coriolis effects, justified by MuJoCo's compensation of complex dynamics including gravity and friction. This yields a double-integrator model where the control input $tau_"MPC"$ effectively commands joint acceleration:
+The MPC module is given the desired joint angles $q_"des" in RR^3$ from the IK module and computes optimal control torques $tau_"MPC"$ with a specified prediction horizon. We simplify the system dynamics for the MPC formulation by assuming unit inertia and neglecting Coriolis effects, justified by MuJoCo's compensation of complex dynamics. This yields a double-integrator model where the control input $tau_"MPC"$ effectively commands joint acceleration:
 
 $
   dot.double(q) = tau_"MPC"
@@ -350,7 +350,7 @@ In this section, we compare performance of training models with two different lo
   caption :[Loss Comparison]
 )<table:loss_comparison>
 
-After this experiment, we decided to use the Mean Squared Error (MSE) loss function for our experiments because models trained with MSE consistently achieved lower test error and lower variance across runs, as shown in Table @table:loss_comparison. In particular, the MLP_mse and GRU_mse configurations outperformed their MAE-trained counterparts in terms of MSE, which was our primary performance metric for policy imitation.
+After this experiment, we decided to use the Mean Squared Error (MSE) loss function for our experiments because models trained with MSE consistently achieved lower test error and lower variance across runs, as shown in @table:loss_comparison. In particular, the MLP_mse and GRU_mse configurations outperformed their MAE-trained counterparts in terms of MSE, which was our primary performance metric for policy imitation.
 
 == Hyperparameters Tuning of MLP and GRU
 
@@ -388,40 +388,54 @@ We evaluated four variations of the Multi-Layer Perceptron (MLP) and four variat
   caption: [Summary of model architectures and hyperparameters used during tuning.]
 ) <tab:model_configs>
 
-To approximate the temporal awareness, we also implemented Sliding Window (SW) variants (W = 5) across the MLP variants: MLP_Win5_Small, MLP_Win5_Medium, MLP_Win5_Deep, and MLP_Win5_Deep_Scaled.
+To approximate temporal awareness, we also implemented Sliding Window (SW) variants (W=5) across the four MLP architectures, using the same hidden layer parameters.
 
 === Results Analysis
 #figure(
   image("figures/grouped_complexity_comparison.png", width: 100%),
-  caption :[Architecture Comparison (Metric: MSE, Lower is better). Error bars represent the standard deviation across 5 runs.]
+  caption :[Architecture Comparison (Metric: MSE). Error bars represent the standard deviation across 5 runs. Note: GRU_Wide is plot under Deep+.]
 ) <fig:architecture_comparison>
 
 The performance comparison in @fig:architecture_comparison highlights distinct trends between the MLP and GRU architectures:
 
-+ *MLP Superiority:* In this specific experimental setting, the MLP architectures consistently outperformed the GRU variants. The `MLP_Deep` configuration achieved the lowest Mean MSE overall (approximately 0.05).
-+ *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with `MLP_Deep` notably outperforming `MLP_Medium` and `MLP_Small`. Increasing width did not seem to improve performance as MLP_Deep_Scaled was unable to achieve a significant reduction in MSE over MLP_Deep. This suggests that for this task, increasing the depth of the network is more beneficial for performance.
-+ *Impact of Sliding Window:* Contrary to the expectation that history would aid prediction, the inclusion of a sliding window did not result in a reduction in MSE. For small complexity models, the SW variant performed comparably to the statistic baseline. However, for medium and deep variants, the sliding window actually resulted in a slight increase in MSE. This counter-intuitive result suggests that for this specific task, the current state contains sufficient information to determine the optimal control action (Markov property). The sliding window increased the input dimensionality, which likely complicated the optimization landscape and introduced redundant noise to the MLP.
-+ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. The `GRU_Shallow` model performed worst among all tested configurations (MSE $approx$ 2.7). However, increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved comparable performance (MSE $approx$ 0.5), significantly improving upon the shallower variants, though still lagging behind the best MLP.
++ *MLP Superiority:* In our experimental setting, the MLP architectures consistently outperformed the GRU variants. The `MLP_Deep` configuration achieved the lowest Mean MSE overall (approximately 0.05).
++ *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with `MLP_Deep` notably outperforming `MLP_Medium` and `MLP_Small`. Increasing width did not improve performance as MLP_Deep_Scaled was unable to achieve a significant reduction in MSE over MLP_Deep. This suggests that for this task, increasing the depth of the network is more beneficial for performance.
++ *Impact of Sliding Window:* Contrary to the expectation that history would aid prediction, the inclusion of a sliding window did not result in a reduction in MSE. In fact, the sliding window resulted in a slight increase in MSE for medium and deep models. This counter-intuitive result suggests that for this specific task, the current state contains sufficient information to determine the optimal control action (Markov property). The sliding window likely complicated the optimization landscape, introducing redundant noise to the model.
++ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. `GRU_Shallow` performed the worst among all tested configurations (MSE $approx$ 2.7). Increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved comparable performance (MSE $approx$ 0.5), significantly improving upon the shallower variants, though still lagging behind the MLP models.
 
 Based on these results, `MLP_Deep` demonstrates the strongest predictive capability and stability on the test set.
 
 == Online evaluation (MuJoCo)
 
-To validate these offline findings, we conducted a comprehensive online evaluation. We deployed every trained controller into the closed-loop MuJoCo simulation. These were benchmarked against the original MPC controller (Expert). We executed 1000 random test episodes, with a limit of 150 steps per episode, for each model. 
-+ *Evaluation Metrics:* We measured performance using *Success Rate*, defined as the percentage of episodes where the end-effector converges within a Euclidean distance $epsilon$ of the target. To analyze precision, three tiers were established: *Strict* ($epsilon = 0.02m$), *Moderate* ($epsilon = 0.03m$), and *Relaxed* ($epsilon = 0.05m$). We also tracked *Inference Latency* to quantify the speedup relative to the MPC solver, and *Control Effort* to measure the smoothness of the learned models.
+To validate these offline findings, we conducted a comprehensive online evaluation. We deployed every trained controller into the closed-loop MuJoCo simulation. These were benchmarked against the original MPC policy (Expert). We executed 1000 random test episodes, with a limit of 150 steps per episode, for each model. Performance was measured using *Success Rate*, defined as the percentage of episodes where the end-effector converges within a Euclidean distance $epsilon$ of the target. To analyze precision, three tiers were established: Strict ($epsilon = 0.02m$), Moderate ($epsilon = 0.03m$), and Relaxed ($epsilon = 0.05m$). We also tracked *Inference Latency* to quantify the speedup relative to the MPC solver.
 
-+ *Success Rate Results:* While Scikit-learn baselines failed to control the robot ($<35%$ success rate), the PyTorch-based architectures produced smooth, continuous control actions.
+=== Success Rate Results 
+While Scikit-learn baselines failed to control the robot ($<35%$ success rate), the PyTorch-based architectures produced results comparable to the MPC.
 
 #figure(
   image("figures/closed_loop_success_thresholds.png", width: 80%),
   caption :[Comparison of closed-loop success rates across different error tolerances ($epsilon$). The bar graphs represent the mean values across 5 runs.]
 ) <fig:success_thresholds>
 
-@fig:success_thresholds illustrates the performance of the top-performing models. The results highlight a gap in precision with behavior cloning. The MPC baseline maintained high accuracy accross all threshold, achieving greater than 90% success even under strict tolerances.
+@fig:success_thresholds illustrates the performance of the top-performing models. The results highlight a precision gap in behavior cloning. MLP_Deep was able to achieve 84.98% success rate under relaxed tolerances, but only 64.16% under strict tolerance. However, the mean final tracking error was only 2.9 cm, confirming that the majority of failures were near-misses. This evaluation also confirms our results from earlier, whereby static MLP outperformed temporal architectures, validating that temporal history is unnecessary for this task.
+
+=== Computational Efficiency
+We compared the distribution of solve times between the MPC and MLP_Deep.
+
+#figure(
+  image("figures/mpc_mlp_solvetime_boxplot.png", width: 60%),
+  caption :[Distribution of Inference Latency per Control Step.]
+) <fig:solvetime_boxplot>
+
+The MLP_Deep policy achieved a mean solve time of 1.102$plus.minus$0.614ms. This is nearly one-third of the mean solve time of the MPC Expert. Notably, the neural network offers a much more deterministic inference time as seen in @fig:solvetime_boxplot, making it more suitable for hard real-time constraints than the MPC, whose solve time fluctuates significantly based on the optimization landscape. Additionally, MLP_Deep utilized significantly fewer system resources, with a 25% decrease in CPU utilization as compared to the MPC.
 
 == Discussion
 
-Here Dexter you should talk about the difference between offline results / online results and conclude.
+Our results show a strong alignment between offline regression metrics and closed-loop control performance. The low offline Mean Squared Error (MSE $approx$ 0.5) successfully translated to a robust online policy, achieving a 84.98% success rate under relaxed tolerances. The mean final tracking error of 2.9cm is not a failure of generalization, but rather a direct reflection of the resolution limit inherent in the offline data. The neural network successfully learned the expert's global trajectory, but lacks the gradient-based feedback required to eliminate the final centimeter of error.
+
+Crucially, the failure of Sliding Window and GRU models to outperform static MLPs confirms that for this scenario, temporal history is redundant. This implies that the dynamics for our specific setup have the Markov property and are fully captured by the current state ($q, dot(q)$).
+
+In conclusion, a standard Feedforward Neural Network is able to approximate an MPC policy with approximately 1ms inference latency and 2.9cm average error. MLP_Deep emerged as the optimal architecture, achieving significant improvements in speed and resource utilization, confirming that the learned policy is sufficiently lightweight for deployment on resource-constrained embedded systems.
 
 = Future Work
 
