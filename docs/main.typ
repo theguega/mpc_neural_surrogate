@@ -189,7 +189,9 @@ We ran a simple experiment with both SVR and MLP models from `Scikit-learn` and 
   caption: [MSE vs number of samples (5 trials per model)],
 )<fig:dataset_scale_plot>
 
-Our experiment showed a clear plateau after 30000 samples @fig:dataset_scale_plot, therefore we decided to use only 35000 samples for the training of our regression algorithms. However, we also observed that RNN models such as GRU were taking full benefits of the full dataset by improving significantly compared to MLP models even after 30000 samples. That's why we decided to train regression models with a limitation of 35000 samples and the RNN models with the total 185000 samples collected.
+Our experiment showed a clear plateau after 30000 samples @fig:dataset_scale_plot, therefore we decided to use only 35000 samples for the training of our regression algorithms. However, we also observed that RNN models such as GRU were taking full benefits of the full dataset by improving significantly compared to MLP models even after 30000 samples. 
+
+Nevertheless, since our focus is on finding a suitable architecture for a neural surrogate, we continue to utilize the full dataset for training all of our models for a fair comparison.
 
 = Neural Network Architecture
 
@@ -380,7 +382,7 @@ The performance comparison in @fig:architecture_comparison highlights distinct t
 + *MLP Superiority:* In our experimental setting, the MLP architectures consistently outperformed the GRU variants. The `MLP_Deep` configuration achieved the lowest Mean MSE overall (approximately 0.05).
 + *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with `MLP_Deep` notably outperforming `MLP_Medium` and `MLP_Small`. Increasing width did not improve performance as MLP_Deep_Scaled was unable to achieve a significant reduction in MSE over MLP_Deep. This suggests that for this task, increasing the depth of the network is more beneficial for performance.
 + *Impact of Sliding Window:* Contrary to the expectation that history would aid prediction, the inclusion of a sliding window did not result in a reduction in MSE. In fact, the sliding window resulted in a slight increase in MSE for medium and deep models. This counter-intuitive result suggests that for this specific task, the current state contains sufficient information to determine the optimal control action (Markov property). The sliding window likely complicated the optimization landscape, introducing redundant noise to the model.
-+ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. `GRU_Shallow` performed the worst among all tested configurations (MSE $approx$ 2.7). Increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved comparable performance (MSE $approx$ 0.5), significantly improving upon the shallower variants, though still lagging behind the MLP models.
++ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. `GRU_Shallow` performed the worst among all tested configurations (MSE $approx$ 2.7). Increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved significant improvements upon the shallower variants, though still lagging behind the MLP models.
 
 Based on these results, `MLP_Deep` demonstrates the strongest predictive capability and stability on the test set.
 
@@ -408,17 +410,21 @@ We compared the distribution of solve times between the MPC and MLP_Deep.
 
 The MLP_Deep policy achieved a mean solve time of 1.102$plus.minus$0.614ms. This is nearly one-third of the mean solve time of the MPC Expert. Notably, the neural network offers a much more deterministic inference time as seen in @fig:solvetime_boxplot, making it more suitable for hard real-time constraints than the MPC, whose solve time fluctuates significantly based on the optimization landscape. Additionally, MLP_Deep utilized significantly fewer system resources, with a 25% decrease in CPU utilization as compared to the MPC.
 
-== Discussion
+== Discussion and Conclusion
 
 Our results show a strong alignment between offline regression metrics and closed-loop control performance. The low offline MSE $approx$ 0.5 successfully translated to a robust online policy, achieving a 84.98% success rate under relaxed tolerances. The mean final tracking error of 2.9cm is not a failure of generalization, but rather a direct reflection of the resolution limit inherent in the offline data. The neural network successfully learned the expert's global trajectory, but lacks the gradient-based feedback required to eliminate the final centimeter of error.
 
-Crucially, the failure of Sliding Window and GRU models to outperform static MLPs confirms that for this scenario, temporal history is redundant. This implies that the dynamics for our specific setup have the Markov property and are fully captured by the current state ($q, dot(q)$).
+Crucially, the failure of Sliding Window and GRU models to outperform static MLPs confirms that the dynamics for our specific setup are strictly Markovian and are fully captured by the current state ($q, dot(q)$). Regarding model capacity, while network depth proved critical for capturing the non-linear inverse dynamics, increasing width did not achieve significant performance gains. This suggests that for this specific task, adding more layers is far more effective than adding more neurons.
 
-In conclusion, a standard Feedforward Neural Network is able to approximate an MPC policy with approximately 1ms inference latency and 2.9cm average error. MLP_Deep emerged as the optimal architecture, achieving significant improvements in speed and resource utilization, confirming that the learned policy is sufficiently lightweight for deployment on resource-constrained embedded systems.
+In conclusion, a standard Feedforward Neural Network is able to approximate an MPC policy with approximately 1ms inference latency and 2.9cm average error. MLP_Deep emerged as the optimal architecture, achieving significant improvements in speed and resource utilization, confirming that the learned policy is sufficiently lightweight for deployment on resource-constrained embedded systems. 
 
 = Future Work
 
-This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, the scalability of the approach should be evaluated on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). This is to assess how the method handles increased state and action space dimensionality. Second, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling more complex dynamics.
+This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, to bridge the precision gap under strict tolerances, future work should incorporate Data Aggregation (DAgger), allowing the learner to query the expert and correct the terminal steady-state error.
+
+Secondly, future work should investigate this approach on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). We hypothesize that increasing network depth and dataset size will become critical when state and action space dimensionality increases significantly. 
+
+Additionally, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling more complex dynamics.
 
 From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning @deAPorto2025 may prove to be an efficient alternative to learn the underlying MPC cost function.
 
