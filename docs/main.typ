@@ -137,23 +137,7 @@ During this process, if either the MPC controller or the IK solver fails to conv
 
 == Dataset Structure
 
-After generation, the dataset is stored in an episode-based format within a HDF5 file.
-
-#figure(
-  align(left)[
-    - episodes
-      - ep_0000
-        - `states`: $(T_0 times 6)$
-        - `targets`: $(T_0 times 3)$
-        - `actions`: $(T_0 times 3)$
-      - ep_0001
-        - `states`: $(T_1 times 6)$
-        - `targets`: $(T_1 times 3)$
-        - `actions`: $(T_1 times 3)$
-      - ...
-  ],
-  caption: [Hierarchical HDF5 dataset structure],
-)<fig:dataset-structure>
+After generation, the data is stored in HDF5 format, grouped by episodes containing synchronized sequences of states ($6D$), targets ($3D$), and actions ($3D$).
 
 This hierarchical format preserves the temporal integrity of each trial, allowing us to process the data differently depending on the model architecture. The raw data is loaded via a custom MPCDataset class, which constructs the input feature vector $x$ by concatenating the state ($RR^6$) and the target ($RR^3$), resulting in a 9-dimensional input vector.
 
@@ -198,7 +182,7 @@ $
 
 Our goal is to develop a robust and reliable controller that can handle uncertainties and disturbances in the system. To this end, we introduce small Gaussian noise to both the input state $[q_1, q_2, q_3, dot(q)_1, dot(q)_2, dot(q)_3]$ and the output action $tau_"MPC"$. This noise simulates real-world conditions such as sensor noise, actuator noise, and environmental disturbances. Because the data generation pipeline can produce an arbitrary number of samples, we collect a large dataset for training and increase the number of samples until the validation loss plateaus or computational limits are reached.
 
-For this purpose we ran a simple experiment with both SVR and MLP models from `Scikit-learn` and compared their performance while increasing the number of samples progressively.
+We ran a simple experiment with both SVR and MLP models from `Scikit-learn` and compared their performance while increasing the number of samples progressively.
 
 #figure(
   image("figures/dataset_scale_plot.png", width: 80%),
@@ -251,17 +235,8 @@ $
 We evaluated the learned policies using a combination of offline and online metrics:
 
 == Offline Metrics
-We used MAE and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques.
+We used MAE and Root Mean Squared Error (RMSE) to measure the average deviation of the predicted torques from the expert torques. Additionally, we defined Direction Accuracy (DA) to evaluate whether the model correctly identifies the sign (direction) of joint acceleration.
 
-
-
-$
-  "MAE"_j = 1/N sum_(i=0)^n abs(tau_"MPC,i,j" - pi_theta (X_i)_j)
-$
-$
-  "RMSE"_j = 1/N sum_(i=0)^n norm(tau_"MPC,i,j" - pi_theta (X_i)_j)^2_2
-$
- We also evaluated the percentage of predictions where the sign of each torque component matches the expert's using Direction Accuracy (DA). This assesses whether the model correctly identifies the direction of joint acceleration.
 $
   "DA" = 1/(3N) sum_(i=0)^N sum_(j=1)^3 II ("sign"(tau_"MPC,i,j") = "sign"(pi_theta (X_i)_j))
 $
