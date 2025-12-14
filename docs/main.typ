@@ -221,7 +221,7 @@ where $L$ is a loss function that measures the difference between the predicted 
 
 == Regression Baselines
 
-As baselines, we evaluated several models from the scikit-learn library to establish performance benchmarks. These models operate on the flat dataset, treating each timestep as an independent sample. We included tree-based regressors (Random Forest and Gradient Boosting) and a shallow MLP regressor as a lightweight baseline to compare against our deeper custom architectures.
+To establish performance benchmarks, we evaluated several standard regression algorithms from the Scikit-learn library. These models operate on the "flat" dataset format, treating each timestep as an independent sample. We included tree-based regressors (Random Forest and Gradient Boosting) and a shallow MLP regressor as a lightweight baseline to compare against our deeper custom architectures.
 
 == Custom Multi-Layer Perceptron (MLP)
 
@@ -232,11 +232,15 @@ This memory-less architecture captures and learns directly the mapping from the 
 
 == Time Series Models
 
-To leverage the temporal structure of our system, we also employed sequential architectures. Unlike the flat models, these architectures maintain a history of past inputs and outputs to predict the current torque @PonKumar2018.
+To investigate whether historical context improves control fidelity, we evaluated architectures designed to capture temporal dependencies.
+
+=== Sliding Window MLP
+
+We implemented Sliding Window variants with the same depth and width parameters as our custom MLP. These variants receive a concatenated history of the past W state observations as input, where we set $W=5$. This explicitly injects short-term memory into the network to test if providing temporal history can improve predictions.
 
 === Recurrent Neural Networks (RNNs)
 
-We evaluated both Long Short-Term Memory (LSTM) and Gated Recurrent Units (GRU) networks. These models maintain a hidden state $h_t$​ that summarizes the history of the episode up to time $t-1$. For all the recurrent models, the final hidden state was passed through a linear output layer to produce the predicted torque $pi_theta(X)$. Here again, we varied the number of hidden units per layer and the number of layers.
+We evaluated Gated Recurrent Units (GRU) networks. These models maintain a hidden state $h_t$​ that summarizes the history of the episode up to time $t-1$. The final hidden state is then passed through a linear output layer to produce the predicted torque $pi_theta(X)$. Here again, we varied the number of hidden units per layer and the number of layers.
 
 $
   h_t = "RNN"(x_t, h_(t-1)), quad pi_theta(X) = "Linear"(h_t)
