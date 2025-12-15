@@ -163,6 +163,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Author
 
 Theo - [GitHub](https://github.com/theguega)
+Dexter
 
 ## Citation
 
@@ -171,7 +172,7 @@ If you use this code in your research, please cite the relevant papers from the 
 ```bibtex
 @misc{mpc-surrogate,
   title={Approximating Model Predictive Control policies using neural networks},
-  author={Theo},
+  author={Theo Guegan, Dexter Teo},
   year={2024},
   url={https://github.com/your-username/mpc-surrogate}
 }
