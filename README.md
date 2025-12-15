@@ -174,6 +174,6 @@ If you use this code in your research, please cite the relevant papers from the 
   title={Approximating Model Predictive Control policies using neural networks},
   author={Theo Guegan, Wen Jie Dexter Teo},
   year={2025},
-  url={https://github.com/your-username/mpc-surrogate}
+  url={https://github.com/theguega/mpc-surrogate}
 }
 ```
