@@ -74,16 +74,58 @@ python scripts/interactive_mujoco_launcher.py
 Evaluate controller performance:
 
 ```bash
-python scripts/closed_loop_testing.py  # (assuming this exists based on TODO)
+python scripts/closed_loop_eval.py
+```
+
+### Dataset Analysis
+
+Analyze closed-loop evaluation results and generate comparison plots:
+
+```bash
+python scripts/analyze_closed_loop.py
+```
+
+### Visualization
+
+Visualize scikit-learn baseline results:
+
+```bash
+python scripts/visualize_scikit_results.py
+```
+
+### Dataset Scaling
+
+Test model performance with different dataset sizes:
+
+```bash
+python scripts/dataset_scale.py
+```
+
+### Dataset Replay
+
+Replay dataset trajectories in MuJoCo for visualization:
+
+```bash
+python scripts/replay_dataset_mujoco.py
 ```
 
 ## Project Structure
 
 ```
 ├── data/                    # Generated datasets
+├── docs/                    # Research report, figures, and documentation
 ├── models/                  # MuJoCo model files
-├── report/                  # Research report and figures
+├── results/                 # Evaluation results and plots
 ├── scripts/                 # Utility scripts and notebooks
+│   ├── analyze_closed_loop.py       # Closed-loop performance analysis
+│   ├── closed_loop_eval.py          # Closed-loop evaluation
+│   ├── data_generator.py            # MPC data generation
+│   ├── dataset_scale.py             # Dataset scaling experiments
+│   ├── interactive_mujoco_launcher.py # Interactive MuJoCo viewer
+│   ├── mpc_surrogate_training.ipynb # Main training notebook
+│   ├── replay_dataset_mujoco.py     # Dataset visualization
+│   ├── scikit_learn_baseline.py     # Baseline model training
+│   └── visualize_scikit_results.py  # Results visualization
 ├── src/mpc_surrogate/       # Core package
 │   ├── mpc_controller.py    # MPC implementation
 │   ├── mujoco_env.py        # MuJoCo environment wrapper
@@ -124,7 +166,7 @@ Theo - [GitHub](https://github.com/theguega)
 
 ## Citation
 
-If you use this code in your research, please cite our paper:
+If you use this code in your research, please cite the relevant papers from the `docs/refs.bib` file or refer to this repository:
 
 ```bibtex
 @misc{mpc-surrogate,

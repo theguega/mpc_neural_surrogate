@@ -158,9 +158,11 @@ $
 
 Where $N = sum_(i=0)^(E)T_i$ is the total number of timesteps across all episodes.
 
+#pagebreak()
+
 === Sequential Formatting
 
-For time-series algorithms (e.g., LSTM, GRU, Transformer), preserving the temporal dependencies is crucial. We treat every episode as a sequence of timesteps, where each timestep is a sample.
+For time-series algorithms such as GRU, preserving the temporal dependencies is crucial. We treat every episode as a sequence of timesteps, where each timestep is a sample.
 
 $
   X_"seq" in RR^(E times T times 9), quad Y_"seq" in RR^(E times T times 3)
@@ -172,7 +174,7 @@ Where $E$ is the number of episodes and $T$ is the number of timesteps per episo
 
 To approximate a recurrent structure with our MLP architecture, we augment each time step with its previous $W$ timesteps. This injects short-term memory into an otherwise i.i.d. formulation.
 
-For each timestep $t$, we create a new input vector $X_"seq"_{t}$ by concatenating the current state $X_{t}$ with the previous $W$ states $X_{t-1}, X_{t-2}, ..., X_{t-W}$.
+For each timestep $t$, we create a new input vector $X_"seq"_{t}$ by concatenating the current state $X_{t}$ with the previous $W$ states $X_{t-1}, X_{t-2}, ..., X_{t-W}$, and the target $in R^3$ only once to avoid redundancy.
 
 $
   X_"seq" in RR^(N times (W dot 6 + 3)), quad Y_"seq" in RR^(N)
@@ -189,13 +191,13 @@ We ran a simple experiment with both SVR and MLP models from `Scikit-learn` and 
   caption: [MSE vs number of samples (5 trials per model)],
 )<fig:dataset_scale_plot>
 
-Our experiment showed a clear plateau after 30000 samples @fig:dataset_scale_plot, therefore we decided to use only 35000 samples for the training of our regression algorithms. However, we also observed that RNN models such as GRU were taking full benefits of the full dataset by improving significantly compared to MLP models even after 30000 samples. 
+Our experiment showed a clear plateau after 30000 samples @fig:dataset_scale_plot, therefore we decided to use only 35000 samples for the training of our regression algorithms. However, we also observed that RNN models such as GRU were taking full benefits of the full dataset by improving significantly compared to MLP models even after 30000 samples.
 
 Nevertheless, since our focus is on finding a suitable architecture for a neural surrogate, we continue to utilize the full dataset for training all of our models for a fair comparison.
 
 = Neural Network Architecture
 
-We first formulated the learning problem as a regression task, where the goal was to predict the torque $tau_"MPC"$ given the current state $x_k$ and the target $p_"des"$. We aimed to minimize the error between the neural network policy $pi_theta$ and the expert MPC actions:
+We formulated the learning problem as a regression task, where the goal is to predict the torque $tau_"MPC"$ given the current state $x_k$ and the target $p_"des"$. We aimed to minimize the error between the neural network policy $pi_theta$ and the expert MPC actions:
 
 $
   min_theta quad L(pi_theta(X), tau_"MPC")
@@ -340,7 +342,7 @@ In this section, we present the offline evaluation metrics collected during the 
 === Experimental Setup
 To ensure the reliability of our results, each model configuration was trained and evaluated 5 times. The dataset was split into training (80%), validation (10%), and testing (10%) sets. The results presented in @fig:architecture_comparison reflect the MSE on the test set.
 
-We monitored validation loss throughout training to detect potential overfitting. No significant overfitting was observed in any of the experiments across the tested architectures and data augmentation strategies. As established in previous sections, the MLP models were trained on a subset of 35,000 timesteps, which was deemed sufficient for convergence, while the GRU models utilized the full dataset to capture temporal dependencies effectively.
+We also monitored validation loss to detect potential overfitting. No significant overfitting was observed in any of the experiments across the tested architectures and data augmentation strategies. As established in previous sections, the MLP models were trained on a subset of 35,000 timesteps, which was deemed sufficient for convergence, while the GRU models utilized the full dataset to capture temporal dependencies effectively.
 
 === Tested Architectures
 We evaluated four variations of the Multi-Layer Perceptron (MLP) and four variations of the Gated Recurrent Unit (GRU) network. The specific hyperparameters for each configuration are detailed in @tab:model_configs.
@@ -379,18 +381,18 @@ To approximate temporal awareness, we also implemented Sliding Window variants (
 
 The performance comparison in @fig:architecture_comparison highlights distinct trends between the MLP and GRU architectures:
 
-+ *MLP Superiority:* In our experimental setting, the MLP architectures consistently outperformed the GRU variants. The `MLP_Deep` configuration achieved the lowest Mean MSE overall (approximately 0.05).
-+ *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with `MLP_Deep` notably outperforming `MLP_Medium` and `MLP_Small`. Increasing width did not improve performance as MLP_Deep_Scaled was unable to achieve a significant reduction in MSE over MLP_Deep. This suggests that for this task, increasing the depth of the network is more beneficial for performance.
++ *MLP Superiority:* In our experimental setting, the MLP architectures consistently outperformed the GRU variants. The MLP_Deep configuration achieved the lowest Mean MSE overall (approximately 0.05).
++ *Depth vs. Width:* For the MLP, increasing network depth provided significant performance gains, with MLP_Deep notably outperforming MLP_Medium and MLP_Small. Increasing width did not improve performance as MLP_Deep_Scaled was unable to achieve a significant reduction in MSE over MLP_Deep. This suggests that for this task, increasing the depth of the network is more beneficial for performance.
 + *Impact of Sliding Window:* Contrary to the expectation that history would aid prediction, the inclusion of a sliding window did not result in a reduction in MSE. In fact, the sliding window resulted in a slight increase in MSE for medium and deep models. This counter-intuitive result suggests that for this specific task, the current state contains sufficient information to determine the optimal control action (Markov property). The sliding window likely complicated the optimization landscape, introducing redundant noise to the model.
-+ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. `GRU_Shallow` performed the worst among all tested configurations (MSE $approx$ 2.7). Increasing complexity helped; `GRU_Deep` and `GRU_Wide` achieved significant improvements upon the shallower variants, though still lagging behind the MLP models.
++ *GRU Performance:* The GRU models struggled to match the precision of the MLPs. GRU_Shallow performed the worst among all tested configurations (MSE $approx$ 2.7). Increasing complexity helped; GRU_Deep and GRU_Wide achieved significant improvements upon the shallower variants, though still lagging behind the MLP models.
 
-Based on these results, `MLP_Deep` demonstrates the strongest predictive capability and stability on the test set.
+Based on these results, MLP_Deep demonstrates the strongest predictive capability and stability on the test set.
 
 == Online evaluation (MuJoCo)
 
 To validate these offline findings, we conducted a comprehensive online evaluation. We deployed every trained controller into the closed-loop MuJoCo simulation. These were benchmarked against the original MPC policy (Expert). We executed 1000 random test episodes, with a limit of 150 steps per episode, for each model. Performance was measured using *Success Rate*, defined as the percentage of episodes where the end-effector converges within a Euclidean distance $epsilon$ of the target. To analyze precision, three tiers were established: Strict ($epsilon = 0.02m$), Moderate ($epsilon = 0.03m$), and Relaxed ($epsilon = 0.05m$). We also tracked *Inference Latency* to quantify the speedup relative to the MPC solver.
 
-=== Success Rate Results 
+=== Success Rate Results
 While Scikit-learn baselines failed to control the robot ($<35%$ success rate), the PyTorch-based architectures produced results comparable to the MPC.
 
 #figure(
@@ -416,13 +418,13 @@ Our results show a strong alignment between offline regression metrics and close
 
 Crucially, the failure of Sliding Window and GRU models to outperform static MLPs confirms that the dynamics for our specific setup are strictly Markovian and are fully captured by the current state ($q, dot(q)$). Regarding model capacity, while network depth proved critical for capturing the non-linear inverse dynamics, increasing width did not achieve significant performance gains. This suggests that for this specific task, adding more layers is far more effective than adding more neurons.
 
-In conclusion, a standard Feedforward Neural Network is able to approximate an MPC policy with approximately 1ms inference latency and 2.9cm average error. MLP_Deep emerged as the optimal architecture, achieving significant improvements in speed and resource utilization, confirming that the learned policy is sufficiently lightweight for deployment on resource-constrained embedded systems. 
+In conclusion, a standard Feedforward Neural Network is able to approximate an MPC policy with approximately 1ms inference latency and 2.9cm average error. MLP_Deep emerged as the optimal architecture, achieving significant improvements in speed and resource utilization, confirming that the learned policy is sufficiently lightweight for deployment on resource-constrained embedded systems.
 
 = Future Work
 
 This work establishes a foundation for behavior cloning of MPC on 3-DOF manipulators, which can be extended in several directions. Firstly, to bridge the precision gap under strict tolerances, future work should incorporate Data Aggregation (DAgger), allowing the learner to query the expert and correct the terminal steady-state error.
 
-Secondly, future work should investigate this approach on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). We hypothesize that increasing network depth and dataset size will become critical when state and action space dimensionality increases significantly. 
+Secondly, future work should investigate this approach on robotic manipulators with higher degrees of freedom (e.g., 6-DOF). We hypothesize that increasing network depth and dataset size will become critical when state and action space dimensionality increases significantly.
 
 Additionally, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling more complex dynamics.
 
