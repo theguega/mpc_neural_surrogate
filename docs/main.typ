@@ -4,39 +4,18 @@
 #show cite: set text(blue)
 
 #show: ieee.with(
-  title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators#super("1")],
+  title: [Behavior Cloning of MPC for 3-DOF Robotic Manipulators],
   
   abstract: [
     While Model Predictive Control (MPC) provides strong stability and robustness, it imposes a significant computational burden on real-time systems and resource-constrained devices. This paper investigates the application of Behavior Cloning to approximate MPC policies for the real-time control of a 3-degree-of-freedom (3-DOF) robotic manipulator. We present a baseline controller combining Inverse Kinematics with MPC and evaluate a spectrum of neural network architectures, ranging from classical regression algorithms to complex deep learning models including Deep MLPs and RNNs, to derive computationally efficient surrogate policies. We analyze generalization capabilities, stability considerations, and the trade-offs inherent in different architectural choices. Our empirical study employs both online and offline evaluations to assess performance regarding accuracy, computational efficiency, and fidelity to the original MPC policy. Our results demonstrate that Behavior Cloning can effectively reduce the computational burden of MPC policies for 3-DOF robotic manipulators, achieving a 3x reduction in inference latency with a 84.98% success rate under relaxed tolerances. Notably, we find that static architectures outperform temporal variants, confirming the sufficiency of instantaneous state observations for this task. However, we observe a precision gap under strict tolerances, which suggest that while Behavior Cloning captures the global optimal trajectory, further research is needed to minimize terminal steady-state error.
   ],
   authors: (
-    (
-      name: "Theo Guegan",
-      organization: [University of Waterloo],
-      email: "theo.guegan@etu.utc.fr"
-    ),
-    (
-      name: "Wen Jie Dexter Teo",
-      organization: [University of Waterloo],
-      email: "WTEO030@e.ntu.edu.sg"
-    ),
   ),
   bibliography: bibliography("refs.bib"),
   figure-supplement: [Figure],
 )
 
 = Introduction
-
-#figure(
-  placement: bottom,
-)[
-  #align(left)[
-    #block(width: 100%, stroke: (top: 0.5pt), inset: (top: 4pt))[
-      #set text(size: 8pt)
-      #super("1") This project was performed while the authors were on an exchange program at the University of Waterloo. Present addresses: T. Guegan is with the Université de Technologie de Compiègne, France, and is currently a Machine Learning Engineer Intern at Stealth Startup, California, USA. W.J.D. Teo is with Nanyang Technological University, Singapore, and is currently a Research Intern at Polytechnique Montréal, QC, Canada.
-    ]
-  ]
-]
 
 Model Predictive Control (MPC) has been widely used for robotic manipulation @zhou2022modelpredictivecontroldesign, offering an optimal control strategy with strong stability and robustness. However, the computational cost of MPC for solving the optimization problems limits its applicability for both real-time systems and resource-constrained devices. Neural networks, with their diverse architectures, offer a promising and computationally efficient alternative for approximating MPC policies @gonzalez2024neuralnetworksfastoptimisation. We consider a 3-degree-of-freedom (3-DOF) robotic manipulator operating in a MuJoCo simulation environment. The simulation environment provides a realistic and controllable environment for testing and evaluating the proposed methodology. MuJoCo also handles gravity compensation and joint friction, allowing us to simplify the control problem and focus on the learning aspect. The control objective centers on driving the end-effector to reach a 3D cartesian target position within the robot's reachable workspace. Inspired by the recent usage of imitation learning for complex controls @deAPorto2025, we present a complete data generation pipeline for collecting high-quality demonstrations of the desired behavior and an empirical evaluation of both feedforward and recurrent neural networks for policy learning. Our experiment focuses on minimizing the control error and testing the ability of the learned policy to generalize in the simulation environment.
 
@@ -167,8 +146,6 @@ $
 $
 
 Where $N = sum_(i=0)^(E)T_i$ is the total number of timesteps across all episodes.
-
-#pagebreak()
 
 === Sequential Formatting
 
@@ -439,7 +416,3 @@ Secondly, future work should investigate this approach on robotic manipulators w
 Additionally, to advance towards real-world deployment, the methodology should be extended to handle more complex control scenarios. It could be interesting to investigate the cloning of a non-linear MPC which is capable of handling more complex dynamics.
 
 From a methodological perspective, exploring advanced neural network architectures represents a promising direction. Transformer models, with their self-attention mechanisms, could be investigated for their ability to capture complex, long-range dependencies. Furthermore, the Legendre Memory Unit (LMU) @NEURIPS2019_952285b9, developed at the University of Waterloo, offers a complementary, principled approach to continuous time memory, which may prove to be well-suited for the robotic system's underlying dynamics. Inverse reinforcement learning @deAPorto2025 may prove to be an efficient alternative to learn the underlying MPC cost function.
-
-= Acknowledgments
-
-This project is a final project for the course "Foundations of Artificial Intelligence" - SYDE522. We would like to thank our instructor Terry Stewart for his guidance and support.
