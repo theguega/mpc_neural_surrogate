@@ -12,13 +12,11 @@
   authors: (
     (
       name: "Theo Guegan",
-      department: [21229606],
       organization: [University of Waterloo],
       email: "theo.guegan@etu.utc.fr"
     ),
     (
       name: "Wen Jie Dexter Teo",
-      department: [21230211],
       organization: [University of Waterloo],
       email: "WTEO030@e.ntu.edu.sg"
     ),
