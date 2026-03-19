@@ -168,8 +168,6 @@ $
 
 Where $N = sum_(i=0)^(E)T_i$ is the total number of timesteps across all episodes.
 
-#pagebreak()
-
 === Sequential Formatting
 
 For time-series algorithms such as GRU, preserving the temporal dependencies is crucial. We treat every episode as a sequence of timesteps, where each timestep is a sample.
