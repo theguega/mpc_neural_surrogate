@@ -168,8 +168,6 @@ $
 
 Where $N = sum_(i=0)^(E)T_i$ is the total number of timesteps across all episodes.
 
-#pagebreak()
-
 === Sequential Formatting
 
 For time-series algorithms such as GRU, preserving the temporal dependencies is crucial. We treat every episode as a sequence of timesteps, where each timestep is a sample.
@@ -283,7 +281,7 @@ For our regression baseline with scikit-learn, we evaluated several standard reg
 
 #figure(
   table(
-    columns: (auto, auto, auto, auto, auto, auto),
+    columns: (70pt, auto, auto, auto, auto, auto),
     inset: 5pt,
     align: (col, row) => (if col == 0 { left } else { center + horizon }),
     stroke: (x, y) => (
