@@ -34,7 +34,7 @@
   #align(left)[
     #block(width: 100%, stroke: (top: 0.5pt), inset: (top: 4pt))[
       #set text(size: 8pt)
-      #super("1") This project was performed while the authors were on an exchange program at the University of Waterloo.
+      #super("1") This project was performed while the authors were on an exchange program at the University of Waterloo, Canada.
     ]
   ]
 ]
@@ -441,4 +441,4 @@ From a methodological perspective, exploring advanced neural network architectur
 
 = Acknowledgments
 
-This project is a final project for the course "Foundations of Artificial Intelligence" - SYDE522 at the University of Waterloo. We would like to thank our instructor Terry Stewart for his guidance and support.
+This project is a final project for the course "Foundations of Artificial Intelligence" - SYDE522 at the University of Waterloo, Canada. We would like to thank our instructor Terry Stewart for his guidance and support.
