@@ -13,6 +13,7 @@
   ],
   authors: (
   ),
+  index-terms: ("Behavior Cloning", "Model Predictive Control", "Neural Network Surrogates", "Real-time Control"),
   bibliography: bibliography("refs.bib"),
   figure-supplement: [Figure],
 )
