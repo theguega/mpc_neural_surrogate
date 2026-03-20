@@ -12,16 +12,16 @@
   authors: (
     (
       name: "Theo Guegan",
-      organization: [University of Waterloo],
+      organization: [Université de Technologie de Compiègne, France],
       email: "theo.guegan@etu.utc.fr"
     ),
     (
       name: "Wen Jie Dexter Teo",
-      organization: [University of Waterloo],
+      organization: [Nanyang Technological University, Singapore],
       email: "WTEO030@e.ntu.edu.sg"
     ),
   ),
-  index-terms: ("Behavior Cloning", "Model Predictive Control", "Neural Network Surrogates", "Robotic Manipulators", "Real-time Control"),
+  index-terms: ("Behavior Cloning", "Model Predictive Control", "Robotic Manipulators", "Real-time Control"),
   bibliography: bibliography("refs.bib"),
   figure-supplement: [Figure],
 )
@@ -34,7 +34,7 @@
   #align(left)[
     #block(width: 100%, stroke: (top: 0.5pt), inset: (top: 4pt))[
       #set text(size: 8pt)
-      #super("1") This project was performed while the authors were on an exchange program at the University of Waterloo. Present addresses: T. Guegan is with the Université de Technologie de Compiègne, France, and is currently a Machine Learning Engineer Intern at Stealth Startup, California, USA. W.J.D. Teo is with Nanyang Technological University, Singapore, and is currently a Research Intern at Polytechnique Montréal, QC, Canada.
+      #super("1") This project was performed while the authors were on an exchange program at the University of Waterloo.
     ]
   ]
 ]
