@@ -441,4 +441,4 @@ From a methodological perspective, exploring advanced neural network architectur
 
 = Acknowledgments
 
-This project is a final project for the course "Foundations of Artificial Intelligence" - SYDE522. We would like to thank our instructor Terry Stewart for his guidance and support.
+This project is a final project for the course "Foundations of Artificial Intelligence" - SYDE522 at the University of Waterloo. We would like to thank our instructor Terry Stewart for his guidance and support.
