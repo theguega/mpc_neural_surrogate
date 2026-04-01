@@ -16,7 +16,7 @@
       email: "theo.guegan@etu.utc.fr"
     ),
     (
-      name: "Wen Jie Dexter Teo",
+      name: "Dexter Wen Jie Teo",
       organization: [Nanyang Technological University, Singapore],
       email: "WTEO030@e.ntu.edu.sg"
     ),
